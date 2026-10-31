@@ -54,6 +54,11 @@ export interface MovePage {
    *  chips each in its `movePads` column. It is the app's reserved row when
    *  the app claims the pads, and then it shows nothing. Absent: none. */
   bottom?: ControlMeta[];
+  /** Each dial's nested layer, by the dial's path: the controls that name it
+   *  in `moveNest`, in the order the panel declares them. They take no slot
+   *  on the page; the panel lifts them over the grid when the dial is
+   *  double-tapped. Only dials on this page carry one. Absent: none. */
+  nested?: Record<string, ControlMeta[]>;
 }
 
 const flat = (controls: ControlMeta[], out: ControlMeta[] = []): ControlMeta[] => {
@@ -274,7 +279,10 @@ export type MoveLayoutIssueCode =
   | 'tabs-oversized'
   | 'tabs-no-room'
   | 'band-apart'
-  | 'edges-apart';
+  | 'edges-apart'
+  | 'nest-no-parent'
+  | 'nest-not-a-slot'
+  | 'nest-full';
 
 type MoveLayoutReporter = (code: MoveLayoutIssueCode, message: string) => void;
 
@@ -325,7 +333,10 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
   return plain
     .slice(0, MOVE_TRACKS)
     .map((panel) => {
-      const controls = flat(panel.controls);
+      // A nested layer's children take no part in the page: they wait behind
+      // their dial and are seated once the dials have landed (`moveNests`).
+      const all = flat(panel.controls);
+      const controls = all.filter((c) => !c.moveNest);
       // Dials pack left to right, each claiming its span of columns — a
       // span-2 control sits in both of its columns, so occupancy checks and
       // the knob-number rule need no second bookkeeping. A wide control that
@@ -667,6 +678,8 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
         ...(valueActions.length ? { valueActions: valueActions.slice(0, MOVE_PADS) } : {}),
         ...(bottom.length ? { bottom: bottom.slice(0, MOVE_PADS) } : {}),
       };
+      const nested = moveNests(panel, all, dials);
+      if (nested) page.nested = nested;
       // 5. A band whose two chips did not land one over the other in a column
       //    draws as those two chips — said out loud, like any quiet decision.
       const rows = movePadRows(page, 0);
@@ -697,6 +710,60 @@ export function buildMovePages(panels: PanelConfig[]): MovePage[] {
       return page;
     });
 }
+
+/**
+ * Each dial's nested layer: the controls that name it in `moveNest`, seated
+ * behind it in the order the panel declares them — the extra knobs a dial
+ * needs when the page has no slot left for them. A layer is one row of big
+ * slots, so it holds what fits the eight dial columns, and only controls that
+ * can be a big slot. Everything else is said out loud and left off, the same
+ * courtesy every other quiet decision here gets: a child whose dial is not on
+ * the page (no such control, a chip, a dropped dial, another layer's child),
+ * a child that cannot be a slot, a child past the eighth column.
+ */
+function moveNests(panel: PanelConfig, controls: ControlMeta[], dials: ControlMeta[]): Record<string, ControlMeta[]> | undefined {
+  const out: Record<string, ControlMeta[]> = {};
+  const used: Record<string, number> = {};
+  for (const c of controls) {
+    if (!c.moveNest) continue;
+    const parent = dials.find((d) => d?.path === c.moveNest);
+    if (!parent) {
+      const named = controls.find((x) => x.path === c.moveNest);
+      reportMoveLayoutIssue(
+        'nest-no-parent',
+        `panel '${panel.id}': control '${c.path}' names moveNest '${c.moveNest}', ${named ? 'which holds no dial on the page' : 'and there is no such control'} — not shown`
+      );
+      continue;
+    }
+    if (!isNestable(c)) {
+      reportMoveLayoutIssue(
+        'nest-not-a-slot',
+        `panel '${panel.id}': control '${c.path}' (${c.type}) cannot be a big slot — not shown in the nested layer of '${parent.path}'`
+      );
+      continue;
+    }
+    const span = dialSpan(c);
+    const at = used[parent.path] ?? 0;
+    if (at + span > MOVE_DIALS) {
+      reportMoveLayoutIssue(
+        'nest-full',
+        `panel '${panel.id}': control '${c.path}': the nested layer of '${parent.path}' has no column left of its ${MOVE_DIALS} — not shown`
+      );
+      continue;
+    }
+    used[parent.path] = at + span;
+    (out[parent.path] ??= []).push(c);
+  }
+  return Object.keys(out).length ? out : undefined;
+}
+
+/** What a nested layer can hold: anything that can be a big slot — every
+ *  dial, and a switch, which takes a big slot of its own there. */
+const isNestable = (c: ControlMeta) => isDial(c) || c.type === 'toggle';
+
+/** A dial's nested layer — its children, in order — or none. */
+export const moveNestChildren = (page: MovePage | undefined, path: string | null | undefined): ControlMeta[] =>
+  (path && page?.nested?.[path]) || [];
 
 /**
  * The pad grid's four rows, top to bottom, exactly as the hardware stacks

@@ -545,6 +545,24 @@
   /* The agent's prompt box. A host that keeps its own content clear of the
      box (it floats at the panel's right edge) reads its width here. */
   --move-agent-width: 364px;
+  /* A dial's nested layer (`moveNest`): a lifted sheet of the instrument. Its
+     padding bleeds outside the cells, so the cells — not the sheet's edge —
+     stand on the dial row's columns; its corners follow the slots' inside. */
+  --move-nest-pad: 8px;
+  --move-nest-radius: calc(var(--move-radius) + var(--move-nest-pad));
+  --move-nest-shadow: var(--move-list-shadow);
+  /* It comes up on the ease-out and clears out faster on the exit curve,
+     from just under its size and a little below its place. */
+  --move-nest-duration: 220ms;
+  --move-nest-exit-duration: 160ms;
+  --move-nest-scale: 0.98;
+  --move-nest-rise: 6px;
+  /* What stays behind recedes: faded down, blurred out. */
+  --move-nest-behind-opacity: 0.35;
+  --move-nest-behind-blur: 4px;
+  /* The "+" on a dial that has a layer: muted, small, in the ring's corner. */
+  --move-nest-mark: color-mix(in srgb, var(--move-text) 45%, transparent);
+  --move-nest-mark-inset: 7px;
 }
 
 .tweakers-move {
@@ -1254,7 +1272,8 @@
   white-space: nowrap;
 }
 
-.tweakers-move-view-wait-cancel {
+.tweakers-move-view-wait-cancel,
+.tweakers-move-nest-back {
   display: inline-flex;
   align-items: center;
   gap: 4px;
@@ -1272,11 +1291,13 @@
   transition: filter var(--move-spring-press-duration) var(--move-spring-press);
 }
 
-.tweakers-move-view-wait-cancel:hover {
+.tweakers-move-view-wait-cancel:hover,
+.tweakers-move-nest-back:hover {
   filter: brightness(1.15);
 }
 
-.tweakers-move-view-wait-cancel svg {
+.tweakers-move-view-wait-cancel svg,
+.tweakers-move-nest-back svg {
   flex-shrink: 0;
   width: 12px;
   height: 12px;
@@ -1734,6 +1755,115 @@
    container, so they stay on the line of the faces they separate. */
 .tweakers-move-slot-group[data-labelled] > .tweakers-move-slot-group-divider {
   top: calc(50% + var(--move-group-band) / 2);
+}
+
+/* A dial's nested layer (`moveNest`, MoveNestLayer). The anchor is the dial
+   row's own box, measured off the live row; it is the container a cell is
+   measured in, so a cell is exactly the row's share of it — the row less its
+   gaps, over its columns — and child k stands on column k. */
+.tweakers-move-nest {
+  position: absolute;
+  z-index: 3;
+  container-type: inline-size;
+  pointer-events: none;
+  --move-nest-cell: calc((100cqw - (var(--move-cols, 8) - 1) * var(--move-gap)) / var(--move-cols, 8));
+}
+
+/* The sheet: the slots' own ground, lifted — its shadow is its height. The
+   padding bleeds outside the cells, and the cells sit at the row's bottom,
+   where a slot under a group's name sits too. It grows out of its dial. */
+.tweakers-move-nest-sheet {
+  position: absolute;
+  left: calc(-1 * var(--move-nest-pad));
+  top: calc(100% - var(--move-slot-height) - var(--move-nest-pad));
+  width: max-content;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--move-nest-pad);
+  padding: var(--move-nest-pad);
+  background: var(--move-bg);
+  color: var(--move-text);
+  border-radius: var(--move-nest-radius);
+  box-shadow: var(--move-nest-shadow);
+  transform-origin:
+    calc(var(--move-nest-pad) + var(--move-nest-origin, 0) * (var(--move-nest-cell) + var(--move-gap)) + var(--move-nest-cell) / 2)
+    calc(var(--move-nest-pad) + var(--move-slot-height) / 2);
+  opacity: 0;
+  transform: translateY(var(--move-nest-rise)) scale(var(--move-nest-scale));
+  transition:
+    opacity var(--move-nest-exit-duration) var(--move-ease-exit),
+    transform var(--move-nest-exit-duration) var(--move-ease-exit);
+}
+
+.tweakers-move-nest[data-open] .tweakers-move-nest-sheet {
+  opacity: 1;
+  transform: none;
+  pointer-events: auto;
+  transition-duration: var(--move-nest-duration);
+  transition-timing-function: var(--move-ease-out);
+}
+
+.tweakers-move-nest-row {
+  display: grid;
+  grid-template-columns: repeat(var(--move-nest-span, 1), var(--move-nest-cell));
+  gap: var(--move-gap);
+  height: var(--move-slot-height);
+}
+
+/* The back tab: the kit's back pill (see the wait's Cancel), naming the dial
+   the layer belongs to. */
+.tweakers-move-nest-back {
+  margin-top: 0;
+}
+
+.tweakers-move-nest-back:focus-visible {
+  outline: 2px solid var(--move-text);
+  outline-offset: 2px;
+}
+
+/* Everything else recedes behind the sheet — faded down, blurred out — and
+   comes back on the way out. */
+.tweakers-move-inner > .tweakers-move-tracks,
+.tweakers-move-inner > .tweakers-move-controls {
+  transition:
+    opacity var(--move-nest-exit-duration) var(--move-ease-exit),
+    filter var(--move-nest-exit-duration) var(--move-ease-exit);
+}
+
+.tweakers-move-inner[data-nest] > .tweakers-move-tracks,
+.tweakers-move-inner[data-nest] > .tweakers-move-controls {
+  opacity: var(--move-nest-behind-opacity);
+  filter: blur(var(--move-nest-behind-blur));
+  transition-duration: var(--move-nest-duration);
+  transition-timing-function: var(--move-ease-out);
+}
+
+/* Less motion: a plain cross-fade — no blur, no rise, no scale. */
+@media (prefers-reduced-motion: reduce) {
+  .tweakers-move-nest-sheet {
+    transform: none;
+  }
+
+  .tweakers-move-inner[data-nest] > .tweakers-move-tracks,
+  .tweakers-move-inner[data-nest] > .tweakers-move-controls {
+    filter: none;
+  }
+}
+
+/* The mark on a dial with a nested layer — one rule, one element: remove
+   both and it is gone. It sits in the ring's corner of the slot, measured
+   from the row's bottom like the slot itself. */
+.tweakers-move-nest-mark {
+  position: absolute;
+  top: calc(100% - var(--move-slot-height) + var(--move-nest-mark-inset));
+  right: var(--move-nest-mark-inset);
+  z-index: 1;
+  color: var(--move-nest-mark);
+  font-family: var(--move-font-label);
+  font-size: 13px;
+  line-height: 1;
+  pointer-events: none;
 }
 
 .tweakers-move-dial[data-empty="true"] {
