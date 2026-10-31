@@ -16988,12 +16988,13 @@ function MoveNestLayer({ panelId, view, row: row2, returnFocus, valueFirst, onCl
     const onKey2 = (e) => {
       if (e.key !== "Escape" || e.defaultPrevented || editable(e.target)) return;
       e.preventDefault();
+      e.stopPropagation();
       close.current();
     };
-    window.addEventListener("keydown", onKey2);
+    window.addEventListener("keydown", onKey2, { capture: true });
     return () => {
       release();
-      window.removeEventListener("keydown", onKey2);
+      window.removeEventListener("keydown", onKey2, { capture: true });
     };
   }, [open2]);
   if (!present || !shown) return null;

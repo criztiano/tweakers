@@ -152,18 +152,22 @@ export function MoveNestLayer({ panelId, view, row, returnFocus, valueFirst, onC
   }, [lifted]);
 
   // Escape and the Move's Back close it, the way every lifted thing closes.
+  // The sheet stands in front of everything else on the page, so it hears
+  // Escape first (capture) and keeps it: an app's own Escape — a selection
+  // on the canvas, say — must not take it and leave the sheet up.
   useEffect(() => {
     if (!open) return;
     const release = MoveFunctions.push('back', () => close.current(), { label: 'Close', chip: false });
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape' || e.defaultPrevented || editable(e.target)) return;
       e.preventDefault();
+      e.stopPropagation();
       close.current();
     };
-    window.addEventListener('keydown', onKey);
+    window.addEventListener('keydown', onKey, { capture: true });
     return () => {
       release();
-      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('keydown', onKey, { capture: true });
     };
   }, [open]);
 
