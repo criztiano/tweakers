@@ -10040,19 +10040,18 @@ function moveSteerEase(curve) {
     return at2(y1, y2, s);
   };
 }
-var MOVE_STEER_ARC_BEND = 0.3;
-function moveSteerArc(from, to, heading, t) {
-  const dist = Math.hypot(to.x - from.x, to.y - from.y);
-  const len = Math.hypot(heading.x, heading.y);
-  const mid2 = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
-  const lean = len > 0.5 ? { x: from.x + heading.x / len * dist * 0.5, y: from.y + heading.y / len * dist * 0.5 } : mid2;
-  const bend = { x: mid2.x + (lean.x - mid2.x) * MOVE_STEER_ARC_BEND, y: mid2.y + (lean.y - mid2.y) * MOVE_STEER_ARC_BEND };
-  const u = 1 - t;
-  return {
-    x: u * u * from.x + 2 * u * t * bend.x + t * t * to.x,
-    y: u * u * from.y + 2 * u * t * bend.y + t * t * to.y
-  };
+var MOVE_STEER_OUT_BUMP = 0.6;
+var MOVE_STEER_OUT_BUMP_MS = 180;
+var MOVE_STEER_OUT_CLOSE = 140;
+function moveSteerOut(at2, real, d, sinceMs, rate) {
+  const k = 1 + MOVE_STEER_OUT_BUMP * Math.exp(-sinceMs / MOVE_STEER_OUT_BUMP_MS);
+  const p = { x: at2.x + d.x * k, y: at2.y + d.y * k };
+  const gap = Math.hypot(real.x - p.x, real.y - p.y);
+  if (!rate || !gap) return p;
+  const c = Math.min(1, rate * Math.hypot(d.x, d.y) / gap);
+  return { x: p.x + (real.x - p.x) * c, y: p.y + (real.y - p.y) * c };
 }
+var moveSteerOutRate = (gap) => Math.max(0.25, gap / MOVE_STEER_OUT_CLOSE);
 
 // src/move-steer.ts
 import { TweakStore as TweakStore10 } from "tweakers/store";
@@ -10168,8 +10167,6 @@ var FLUNG = 200;
 var MOVE_STEER_AXIS_SLOP = 4;
 var CLICK_SLOP = 3;
 var SUCK_MS = 260;
-var SHOOT_MS = 180;
-var CATCH_UP = 0.12;
 var sent = /* @__PURE__ */ new WeakSet();
 var steered = /* @__PURE__ */ new WeakSet();
 var isMoveSteer = (e) => steered.has("nativeEvent" in e ? e.nativeEvent : e);
@@ -10207,7 +10204,6 @@ function attachMoveSteer(root) {
   let hold = null;
   let press = null;
   let pressTravel = 0;
-  let heading = { x: 0, y: -1 };
   let landing = 0;
   let wheelHold = false;
   let wheelRest;
@@ -10365,27 +10361,25 @@ function attachMoveSteer(root) {
     for (const el of springs.keys()) pose(el, { x: 0, y: 0, vx: 0, vy: 0 });
     springs.clear();
   };
-  const ghost = (kind, from, to, ms, token, done) => {
+  const suck = (from, to, done) => {
     if (reduced()) {
       done();
       return null;
     }
     const g = document.createElement("i");
-    g.className = `tweakers-move-steer-ghost tweakers-move-steer-${kind}`;
-    if (kind === "arrow") g.innerHTML = ARROW;
+    g.className = "tweakers-move-steer-ghost tweakers-move-steer-arrow";
+    g.innerHTML = ARROW;
     layer().append(g);
     const panel = root();
-    const ease = moveSteerEase(panel ? getComputedStyle(panel).getPropertyValue(token) : "");
-    const way = { ...heading };
-    const scale = kind === "arrow" ? [1, 0.15] : [0.35, 1];
+    const ease = moveSteerEase(panel ? getComputedStyle(panel).getPropertyValue("--move-ease-in") : "");
     const start = performance.now();
     let raf = 0;
     const step = (now) => {
-      const t = Math.min(1, (now - start) / ms);
+      const t = Math.min(1, (now - start) / SUCK_MS);
       const e = ease(t);
-      const p = moveSteerArc(from, to(), way, e);
-      g.style.transform = `translate(${p.x}px, ${p.y}px) scale(${scale[0] + (scale[1] - scale[0]) * e})`;
-      if (kind === "arrow") g.style.opacity = String(1 - 0.8 * e);
+      const end = to();
+      g.style.transform = `translate(${from.x + (end.x - from.x) * e}px, ${from.y + (end.y - from.y) * e}px) scale(${1 - 0.85 * e})`;
+      g.style.opacity = String(1 - 0.8 * e);
       if (t < 1) {
         raf = requestAnimationFrame(step);
         return;
@@ -10421,15 +10415,14 @@ function attachMoveSteer(root) {
     veil?.remove();
     veil = null;
   };
-  const enter = (e) => {
+  const enter = (at2) => {
     const all = targets();
     if (!all.length) return;
     flight?.cancel();
     flight = null;
-    document.documentElement.removeAttribute("data-move-steer");
+    unloose();
     makeVeil();
     inside = true;
-    const at2 = { x: e.clientX, y: e.clientY };
     const slots = all.filter((el) => el.matches(".tweakers-move-dial"));
     const pool = slots.length ? slots : all;
     const top = Math.min(...pool.map((el) => boxOf(el).top));
@@ -10450,12 +10443,13 @@ function attachMoveSteer(root) {
     landing = performance.now() + SUCK_MS;
     const m = middle(boxOf(selected));
     const len = Math.hypot(m.x - at2.x, m.y - at2.y) || 1;
-    flight = ghost("arrow", at2, () => selected?.isConnected ? middle(boxOf(selected)) : m, SUCK_MS, "--move-ease-in", () => {
+    flight = suck(at2, () => selected?.isConnected ? middle(boxOf(selected)) : m, () => {
       flight = null;
       if (selected) knock(selected, { x: (m.x - at2.x) / len, y: (m.y - at2.y) / len }, MOVE_STEER_KNOCK * 1.4);
     });
     wake();
   };
+  let loose = null;
   const leave = (shoot) => {
     endHold();
     endPress(false);
@@ -10466,47 +10460,39 @@ function attachMoveSteer(root) {
     flight?.cancel();
     flight = null;
     unpose();
-    dropVeil();
-    if (!shoot || !from || !real || reduced()) return;
-    const len = Math.hypot(heading.x, heading.y);
-    const dir = len > 0.5 && heading.y / len < -0.3 ? { x: heading.x / len, y: heading.y / len } : { x: 0, y: -1 };
-    if (was) knock(was, { x: -dir.x, y: -dir.y });
-    const top = panelTop() - 18;
-    const reach = Math.min(240, Math.max(0, from.y - top) / -dir.y);
-    const exit = { x: from.x + dir.x * reach, y: from.y + dir.y * reach };
-    document.documentElement.setAttribute("data-move-steer", "out");
-    flight = ghost("dot", from, () => exit, SHOOT_MS, "--move-ease-out", () => {
-      flight = catchUp(exit);
-    });
-  };
-  const catchUp = (at2) => {
+    if (!shoot || !from || !real || reduced()) {
+      dropVeil();
+      return;
+    }
+    if (was) knock(was, { x: 0, y: 1 });
     const g = document.createElement("i");
     g.className = "tweakers-move-steer-ghost tweakers-move-steer-arrow";
     g.innerHTML = ARROW;
     layer().append(g);
-    let off = real ? { x: at2.x - real.x, y: at2.y - real.y } : { x: 0, y: 0 };
-    let last = performance.now();
-    let raf = 0;
-    const done = () => {
-      cancelAnimationFrame(raf);
-      g.remove();
-      flight = null;
-      document.documentElement.removeAttribute("data-move-steer");
-    };
-    const step = (now) => {
-      const k = Math.exp(-Math.min(0.05, (now - last) / 1e3) / CATCH_UP);
-      last = now;
-      off = { x: off.x * k, y: off.y * k };
-      const p = real ? { x: real.x + off.x, y: real.y + off.y } : at2;
-      g.style.transform = `translate(${p.x}px, ${p.y}px)`;
-      if (Math.hypot(off.x, off.y) < 1) {
-        done();
-        return;
-      }
-      raf = requestAnimationFrame(step);
-    };
-    raf = requestAnimationFrame(step);
-    return { cancel: done };
+    loose = { g, at: { x: from.x, y: panelTop() - 4 }, since: performance.now(), rate: 0 };
+    document.documentElement.setAttribute("data-move-steer", "out");
+    placeLoose();
+  };
+  const placeLoose = () => {
+    if (loose) loose.g.style.transform = `translate(${loose.at.x}px, ${loose.at.y}px)`;
+  };
+  const unloose = () => {
+    if (!loose) return;
+    loose.g.remove();
+    loose = null;
+    document.documentElement.removeAttribute("data-move-steer");
+  };
+  const followLoose = (e, d) => {
+    const l = loose;
+    const top = panelTop();
+    const out = e.clientY < top;
+    if (out && veil) dropVeil();
+    if (out && !l.rate) l.rate = moveSteerOutRate(Math.hypot(e.clientX - l.at.x, e.clientY - l.at.y));
+    l.at = moveSteerOut(l.at, { x: e.clientX, y: e.clientY }, d, performance.now() - l.since, out ? l.rate : 0);
+    if (l.at.y >= top + 4) return true;
+    placeLoose();
+    if (out && Math.hypot(e.clientX - l.at.x, e.clientY - l.at.y) < 1.5) unloose();
+    return false;
   };
   const send1 = (g, type, shift) => {
     if (type === "pointerdown") g.pressed = true;
@@ -10647,14 +10633,22 @@ function attachMoveSteer(root) {
     if (sent.has(e) || e.pointerType !== "mouse") return;
     const before = real;
     real = { x: e.clientX, y: e.clientY, id: e.pointerId };
-    if (before) heading = { x: heading.x * 0.6 + (e.clientX - before.x) * 0.4, y: heading.y * 0.6 + (e.clientY - before.y) * 0.4 };
     if (!inside) {
+      if (loose) {
+        if (veil) own(e);
+        if (before && followLoose(e, { x: e.clientX - before.x, y: e.clientY - before.y })) {
+          const at2 = loose.at;
+          own(e);
+          enter(at2);
+        }
+        return;
+      }
       const panel = root();
       const t = e.target instanceof Element ? e.target : null;
       const over = !!panel && !!t && (panel.contains(t) || t === veil || !!veil?.contains(t));
       if (over && e.buttons === 0 && e.clientY >= panelTop()) {
         own(e);
-        enter(e);
+        enter({ x: e.clientX, y: e.clientY });
       }
       return;
     }
@@ -10680,8 +10674,7 @@ function attachMoveSteer(root) {
     const pace = TweakStore10.getValues(MOVE_PANEL_SETTINGS);
     const gain = (v) => typeof v === "number" && v > 0 ? v : MOVE_STEER_GAIN;
     const out = navigate(dx * gain(pace?.handSpeedX), dy * gain(pace?.handSpeedY));
-    const top = panelTop();
-    if (out && e.clientY < top || e.clientY < top - FLUNG) leave(true);
+    if (out || e.clientY < panelTop() - FLUNG) leave(true);
   };
   const navigate = (dx, dy) => {
     if (performance.now() < landing || !regain()) return false;
@@ -10803,6 +10796,7 @@ function attachMoveSteer(root) {
   document.addEventListener("visibilitychange", onVisibility);
   return () => {
     leave(false);
+    unloose();
     if (frame) cancelAnimationFrame(frame);
     window.removeEventListener("pointermove", onMove, true);
     window.removeEventListener("pointerdown", onDown, true);
