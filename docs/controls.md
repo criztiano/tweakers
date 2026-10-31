@@ -128,12 +128,15 @@ The mouse can play the panel the way a hand plays the Move — no click, no
 hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
 
 - **Below the panel's top there is no arrow.** Coming down into the panel the
-  arrow is sucked into the nearest control; going back up over the top
-  edge, a dot is shot out of the control in the hand to where the arrow
+  arrow is sucked into the big slot nearest across, on the top row of
+  slots; going back up over the top edge, a dot is shot out of the control
+  in the hand the way the hand was going, and bends onto the arrow where it
   comes back. There is no way out to the sides or the bottom: a veil over
   the window holds the real pointer while the hand is in.
-- **The pointer is a hand on a control, not a place.** Its travel runs 2.4×
-  the page's (`MOVE_STEER_GAIN`). It leans and stretches the control it
+- **The pointer is a hand on a control, not a place.** Its travel runs
+  quicker than the page's, across and up and down apart — the kit's own
+  **Panel** settings page holds both (Hand speed ←→ and ↑↓, 2.4× by
+  default, `MOVE_STEER_GAIN`), persisted like the rest of the page. It leans and stretches the control it
   holds the way it pulls; past a threshold — the same travel for every
   control, or the whole of a list it points into — it lets go, lands in the
   middle of the next control that way, and that control takes a knock and
