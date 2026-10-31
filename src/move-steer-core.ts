@@ -136,55 +136,32 @@ export function moveSteerSpring(s: MoveSteerSpring, to: MoveSteerVec, dt: number
 /** The knock a control takes when the hand lands on it, in tension per second. */
 export const MOVE_STEER_KNOCK = 14;
 
-/* ── the way in and out: an arc ── */
+/* ── the way in and out: the arrow glides ── */
 
-/**
- * A `cubic-bezier(…)` easing as a function of time, read from the kit's own
- * easing tokens; anything else answers a straight line.
- */
-export function moveSteerEase(curve: string): (t: number) => number {
-  const m = /cubic-bezier\(\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\)/.exec(curve);
-  if (!m) return (t) => t;
-  const [x1, y1, x2, y2] = m.slice(1).map(Number) as [number, number, number, number];
-  const at = (a: number, b: number, s: number) => 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
-  const slope = (a: number, b: number, s: number) => 3 * a * (1 - s) ** 2 + 6 * (b - a) * s * (1 - s) + 3 * (1 - b) * s * s;
-  return (t) => {
-    if (t <= 0) return 0;
-    if (t >= 1) return 1;
-    let s = t;
-    for (let i = 0; i < 8; i++) {
-      const d = slope(x1, x2, s);
-      if (Math.abs(d) < 1e-6) break;
-      s = Math.min(1, Math.max(0, s - (at(x1, x2, s) - t) / d));
-    }
-    return at(y1, y2, s);
-  };
-}
-
-/** Right after the way out, the arrow takes this much more of the pointer's own travel… */
-export const MOVE_STEER_OUT_BUMP = 0.6;
+/** Right after the arrow goes in or out, it takes this much more of the pointer's own travel… */
+export const MOVE_STEER_BUMP = 0.6;
 /** …fading to none over about this long, in ms. */
-export const MOVE_STEER_OUT_BUMP_MS = 180;
-/** The pointer travel, in px, over which the arrow closes on the real pointer. */
-export const MOVE_STEER_OUT_CLOSE = 140;
+export const MOVE_STEER_BUMP_MS = 180;
+/** The pointer travel, in px, over which the arrow closes on where it is going. */
+export const MOVE_STEER_CLOSE = 140;
 
 /**
- * The arrow on its way out, one pointer move on: it moves only as the
- * pointer moves — the pointer's own travel `d`, a little more just after the
- * way out (the bump, fading in `MOVE_STEER_OUT_BUMP_MS`) — and, once the real
- * pointer is out over the panel's top too, each move also closes `rate` px
- * of the gap to the real pointer per px of travel (`moveSteerOutRate`), so
- * the two meet after `MOVE_STEER_OUT_CLOSE` px. No path of its own, no time of
- * its own: a still pointer is a still arrow.
+ * The arrow on its way in or out, one pointer move on: it moves only as the
+ * pointer moves — the pointer's own travel `d`, a little more just after it
+ * crossed (the bump, fading in `MOVE_STEER_BUMP_MS`) — and each move also
+ * closes `rate` px of the gap to `to` per px of travel (`moveSteerGlideRate`),
+ * so it gets there after `MOVE_STEER_CLOSE` px: on the way in, the control
+ * the hand lands on; on the way out, the real pointer. No path of its own,
+ * no time of its own: a still pointer is a still arrow.
  */
-export function moveSteerOut(at: MoveSteerVec, real: MoveSteerVec, d: MoveSteerVec, sinceMs: number, rate: number): MoveSteerVec {
-  const k = 1 + MOVE_STEER_OUT_BUMP * Math.exp(-sinceMs / MOVE_STEER_OUT_BUMP_MS);
+export function moveSteerGlide(at: MoveSteerVec, to: MoveSteerVec, d: MoveSteerVec, sinceMs: number, rate: number): MoveSteerVec {
+  const k = 1 + MOVE_STEER_BUMP * Math.exp(-sinceMs / MOVE_STEER_BUMP_MS);
   const p = { x: at.x + d.x * k, y: at.y + d.y * k };
-  const gap = Math.hypot(real.x - p.x, real.y - p.y);
+  const gap = Math.hypot(to.x - p.x, to.y - p.y);
   if (!rate || !gap) return p;
   const c = Math.min(1, (rate * Math.hypot(d.x, d.y)) / gap);
-  return { x: p.x + (real.x - p.x) * c, y: p.y + (real.y - p.y) * c };
+  return { x: p.x + (to.x - p.x) * c, y: p.y + (to.y - p.y) * c };
 }
 
-/** How fast the arrow closes a `gap` to the real pointer: px of gap per px of travel. */
-export const moveSteerOutRate = (gap: number) => Math.max(0.25, gap / MOVE_STEER_OUT_CLOSE);
+/** How fast the arrow closes a `gap`: px of gap per px of travel. */
+export const moveSteerGlideRate = (gap: number) => Math.max(0.25, gap / MOVE_STEER_CLOSE);

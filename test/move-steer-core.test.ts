@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   MOVE_STEER_REACH_MAX, MOVE_STEER_REACH_MIN, MOVE_STEER_RUBBER, moveSteerNext, moveSteerPose, moveSteerReach,
-  moveSteerSpring, moveSteerTravel, moveSteerEase, moveSteerOut, moveSteerOutRate, MOVE_STEER_OUT_BUMP, MOVE_STEER_OUT_CLOSE, type MoveSteerBox,
+  moveSteerSpring, moveSteerTravel, moveSteerGlide, moveSteerGlideRate, MOVE_STEER_BUMP, MOVE_STEER_CLOSE, type MoveSteerBox,
 } from '../src/move-steer-core';
 
 const box = (left: number, top: number, w: number, h: number): MoveSteerBox => ({ left, top, right: left + w, bottom: top + h });
@@ -82,29 +82,21 @@ describe('the lean', () => {
 });
 
 describe('the way in and out', () => {
-  it('eases by the kit token, and goes straight for anything else', () => {
-    const out = moveSteerEase('cubic-bezier(0.2, 0, 0, 1)');
-    expect(out(0)).toBe(0);
-    expect(out(1)).toBe(1);
-    expect(out(0.3)).toBeGreaterThan(0.5);
-    expect(moveSteerEase('')(0.3)).toBe(0.3);
-  });
-
-  it('moves the arrow out only as the pointer moves, a little more at first', () => {
+  it('moves the arrow only as the pointer moves, a little more at first', () => {
     const at = { x: 0, y: 0 }, real = { x: 300, y: 0 };
-    expect(moveSteerOut(at, real, { x: 0, y: 0 }, 0, 1)).toEqual(at);
-    expect(moveSteerOut(at, real, { x: 0, y: -10 }, 0, 0)).toEqual({ x: 0, y: -10 * (1 + MOVE_STEER_OUT_BUMP) });
-    expect(moveSteerOut(at, real, { x: 0, y: -10 }, 5000, 0).y).toBeCloseTo(-10, 5);
+    expect(moveSteerGlide(at, real, { x: 0, y: 0 }, 0, 1)).toEqual(at);
+    expect(moveSteerGlide(at, real, { x: 0, y: -10 }, 0, 0)).toEqual({ x: 0, y: -10 * (1 + MOVE_STEER_BUMP) });
+    expect(moveSteerGlide(at, real, { x: 0, y: -10 }, 5000, 0).y).toBeCloseTo(-10, 5);
   });
 
-  it('closes on the real pointer as the pointer travels, once that is out too', () => {
+  it('gets where it is going within its travel, whatever the gap', () => {
     let at = { x: 0, y: 0 };
     const real = { x: 300, y: -40 };
-    const rate = moveSteerOutRate(Math.hypot(real.x - at.x, real.y - at.y));
+    const rate = moveSteerGlideRate(Math.hypot(real.x - at.x, real.y - at.y));
     const d = { x: 0, y: -8 };
-    for (let travel = 0; travel < MOVE_STEER_OUT_CLOSE + 8; travel += 8) {
+    for (let travel = 0; travel < MOVE_STEER_CLOSE + 8; travel += 8) {
       real.y += d.y;
-      at = moveSteerOut(at, real, d, 1000, rate);
+      at = moveSteerGlide(at, real, d, 1000, rate);
     }
     expect(Math.hypot(at.x - real.x, at.y - real.y)).toBeLessThan(1);
   });
