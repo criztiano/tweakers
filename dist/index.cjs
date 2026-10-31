@@ -10571,10 +10571,13 @@ function moveSteerEase(curve) {
     return at2(y1, y2, s);
   };
 }
+var MOVE_STEER_ARC_BEND = 0.3;
 function moveSteerArc(from, to, heading, t) {
   const dist = Math.hypot(to.x - from.x, to.y - from.y);
   const len = Math.hypot(heading.x, heading.y);
-  const bend = len > 0.5 ? { x: from.x + heading.x / len * dist * 0.55, y: from.y + heading.y / len * dist * 0.55 } : { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+  const mid2 = { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+  const lean = len > 0.5 ? { x: from.x + heading.x / len * dist * 0.5, y: from.y + heading.y / len * dist * 0.5 } : mid2;
+  const bend = { x: mid2.x + (lean.x - mid2.x) * MOVE_STEER_ARC_BEND, y: mid2.y + (lean.y - mid2.y) * MOVE_STEER_ARC_BEND };
   const u = 1 - t;
   return {
     x: u * u * from.x + 2 * u * t * bend.x + t * t * to.x,
@@ -10729,6 +10732,9 @@ function attachMoveSteer(root) {
   let press = null;
   let pressTravel = 0;
   let heading = { x: 0, y: -1 };
+  let landing = 0;
+  let wheelHold = false;
+  let wheelRest;
   let hovered = null;
   const springs = /* @__PURE__ */ new Map();
   let frame = 0;
@@ -10746,7 +10752,6 @@ function attachMoveSteer(root) {
     const panel = root();
     if (!panel) return [];
     const top = panelTop() - 1;
-    const within = selected?.closest('[role="listbox"]') ?? null;
     return Array.from(panel.querySelectorAll(MOVE_STEER_TARGET)).filter((el) => {
       if (el.parentElement?.closest(MOVE_STEER_TARGET) || el.closest('[aria-hidden="true"], [inert]')) return false;
       const b = boxOf(el);
@@ -10755,7 +10760,7 @@ function attachMoveSteer(root) {
       if (list && list !== el) {
         const v = boxOf(list);
         const y = (b.top + b.bottom) / 2;
-        if (y < v.top || y > v.bottom) return list === within;
+        if (y < v.top || y > v.bottom) return false;
       }
       return b.top >= top;
     });
@@ -10860,7 +10865,6 @@ function attachMoveSteer(root) {
     selected?.removeAttribute("data-steer");
     selected = el;
     selected?.setAttribute("data-steer", "");
-    if (selected?.matches('[role="option"]')) selected.scrollIntoView({ block: "nearest" });
   };
   const regain = () => {
     if (selected?.isConnected) return selected;
@@ -10960,6 +10964,7 @@ function attachMoveSteer(root) {
     select(best);
     offset = { x: 0, y: 0 };
     lastMove = 0;
+    landing = performance.now() + SUCK_MS;
     const m = middle(boxOf(selected));
     const len = Math.hypot(m.x - at2.x, m.y - at2.y) || 1;
     flight = ghost("arrow", at2, () => selected?.isConnected ? middle(boxOf(selected)) : m, SUCK_MS, "--move-ease-in", () => {
@@ -11011,6 +11016,8 @@ function attachMoveSteer(root) {
     const h = hold;
     if (!h) return;
     hold = null;
+    wheelHold = false;
+    clearTimeout(wheelRest);
     release(h.grip);
     if (h.chip !== h.grip) release(h.chip);
     if (real && real.y < panelTop()) leave(true);
@@ -11154,7 +11161,7 @@ function attachMoveSteer(root) {
     navigate(dx * gain(pace?.handSpeedX), dy * gain(pace?.handSpeedY));
   };
   const navigate = (dx, dy) => {
-    if (!regain()) return;
+    if (performance.now() < landing || !regain()) return;
     lastMove = performance.now();
     let all = null;
     let boxes = [];
@@ -11204,25 +11211,72 @@ function attachMoveSteer(root) {
   const onWheel = (e) => {
     if (sent.has(e) || !inside) return;
     own(e);
-    const at2 = under(hand()) ?? selected;
-    if (at2) {
-      send(at2, "wheel", hand(), {
-        deltaX: e.deltaX,
-        deltaY: e.deltaY,
-        deltaZ: e.deltaZ,
-        deltaMode: e.deltaMode,
-        shiftKey: e.shiftKey,
-        altKey: e.altKey,
-        metaKey: e.metaKey,
-        ctrlKey: e.ctrlKey
-      });
+    if (e.ctrlKey && !hold) return;
+    const held = regain();
+    if (!held) return;
+    if (held.closest('[role="listbox"]') && !held.matches(".tweakers-move-dial")) {
+      scrollUnder(e);
+      return;
+    }
+    if (!hold) {
+      beginHold();
+      wheelHold = !!hold;
+    }
+    if (!hold) return;
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1;
+    steer(hold, -e.deltaX * unit, -e.deltaY * unit, e.shiftKey);
+    if (wheelHold) {
+      clearTimeout(wheelRest);
+      wheelRest = setTimeout(() => {
+        if (wheelHold) {
+          wheelHold = false;
+          endHold();
+        }
+      }, 160);
+    }
+  };
+  const scrollUnder = (e) => {
+    const p = hand();
+    const at2 = under(p) ?? selected;
+    if (!at2) return;
+    const turned = send(at2, "wheel", p, {
+      deltaX: e.deltaX,
+      deltaY: e.deltaY,
+      deltaZ: e.deltaZ,
+      deltaMode: e.deltaMode,
+      shiftKey: e.shiftKey,
+      altKey: e.altKey,
+      metaKey: e.metaKey,
+      ctrlKey: e.ctrlKey
+    });
+    if (turned.defaultPrevented) return;
+    let box = at2;
+    while (box && box !== root()) {
+      const style = getComputedStyle(box);
+      if (/(auto|scroll)/.test(style.overflowY) && box.scrollHeight > box.clientHeight) break;
+      box = box.parentElement;
+    }
+    if (!box || box === root()) return;
+    const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? box.clientHeight : 1;
+    box.scrollTop += e.deltaY * unit;
+    const now = under(p)?.closest(MOVE_STEER_TARGET);
+    if (now && now !== selected) {
+      select(now);
+      offset = { x: 0, y: 0 };
+      hover();
     }
   };
   const onOut = (e) => {
     if (!e.relatedTarget) real = null;
   };
   const onKeyDown = (e) => {
-    if (e.key === moveSteerKey() && !e.repeat) beginHold();
+    if (e.key !== moveSteerKey() || e.repeat) return;
+    if (wheelHold) {
+      wheelHold = false;
+      clearTimeout(wheelRest);
+      return;
+    }
+    beginHold();
   };
   const onKeyUp = (e) => {
     if (e.key === moveSteerKey()) endHold();
@@ -17524,12 +17578,13 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     () => import_TweakStore20.TweakStore.getValues(MOVE_PANEL_SETTINGS)
   );
   const trackLabelStyle = moveTrackLabelStyle(panelSettings, trackIcons);
-  const trackFace = (panel, color2) => {
+  const trackFace = (panel, color2, key) => {
     const icon = trackLabelStyle === "name" ? void 0 : moveTrackIcon(panel);
     return /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)(import_jsx_runtime20.Fragment, { children: [
       /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "tweakers-move-track-marker", style: { background: color2 } }),
       icon && /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveSlotGlyph, { name: icon, className: "tweakers-move-track-icon" }),
-      icon && trackLabelStyle === "icon" ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "tweakers-move-track-label", "data-hidden": true, children: panel.name }) : /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "tweakers-move-track-label", children: panel.name })
+      icon && trackLabelStyle === "icon" ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "tweakers-move-track-label", "data-hidden": true, children: panel.name }) : /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("span", { className: "tweakers-move-track-label", children: panel.name }),
+      key !== void 0 && /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("kbd", { className: "tweakers-move-track-key", "aria-hidden": "true", children: key })
     ] });
   };
   const underModSettings = import_ModulationStore3.ModulationStore.getSettings();
@@ -17758,6 +17813,21 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     }, { label: "presets", chip: false });
   }, [pageId]);
   (0, import_react19.useEffect)(() => attachMoveKeys(), []);
+  const selectPageRef = (0, import_react19.useRef)(() => {
+  });
+  (0, import_react19.useEffect)(() => {
+    const onKey2 = (e) => {
+      if (e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      const t = e.target;
+      if (t && (t.isContentEditable || /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName))) return;
+      const n = /^[1-9]$/.test(e.key) ? Number(e.key) : 0;
+      if (!n || n > MOVE_TRACKS) return;
+      e.preventDefault();
+      selectPageRef.current(n - 1);
+    };
+    window.addEventListener("keydown", onKey2);
+    return () => window.removeEventListener("keydown", onKey2);
+  }, []);
   (0, import_react19.useEffect)(() => () => {
     if (MovePresetStore.getView()?.panelId === pageId) MovePresetStore.cancel();
     if (MovePresetStore.getSaving()?.panelId === pageId) MovePresetStore.cancelSave();
@@ -18396,6 +18466,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     setTrack(index);
     window.dispatchEvent(new CustomEvent(MOVE_PAGE_SELECT_EVENT, { detail: { pageId: next.panel.id } }));
   };
+  selectPageRef.current = selectPage;
   const stripStops = stripMode ? stripOffsets(page) : [];
   const stripTotal = stripMode ? Math.max(1, stripSlotCount(page)) : 1;
   const stripFrom = stripMode ? stripSlotIndex(page, stripOffset) : 0;
@@ -18509,6 +18580,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                       "data-active": pg === page,
                       "aria-selected": pg === page,
                       "aria-controls": panelIdForTabs,
+                      "aria-keyshortcuts": i < MOVE_TRACKS ? String(i + 1) : void 0,
                       title: trackLabelStyle === "icon" ? pg.panel.name : void 0,
                       tabIndex: pg === page ? 0 : -1,
                       onClick: () => selectPage(i),
@@ -18520,7 +18592,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                         selectPage(next);
                         event.currentTarget.parentElement?.querySelectorAll('[role="tab"]')[next]?.focus();
                       },
-                      children: trackFace(pg.panel, MOVE_TRACK_COLORS[i])
+                      children: trackFace(pg.panel, MOVE_TRACK_COLORS[i], i < MOVE_TRACKS ? i + 1 : void 0)
                     },
                     pg.panel.id
                   )) }),

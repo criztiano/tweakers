@@ -714,19 +714,38 @@
   flex: none;
 }
 
+/* A track button: its colour's marker, its picture and name, its number
+   key. The marker is the button's whole chip, clipped down to a line while
+   the page is elsewhere; taking the page opens the line out into the chip,
+   on the kit's UI spring, and the name goes dark on it. */
 .tweakers-move-track {
+  --move-track-marker-w: 5px;
+  --move-track-marker-h: 21px;
+  --move-track-gap: 9px;
+  position: relative;
   display: flex;
-  gap: 9px;
+  gap: var(--move-track-gap);
   align-items: center;
   border-radius: var(--move-radius);
   min-height: var(--move-header-control-height);
-  padding: 0 var(--move-color-gap-small);
+  padding: 0 calc(var(--move-color-gap-small) * 2) 0
+    calc(var(--move-color-gap-small) + var(--move-track-marker-w) + var(--move-track-gap));
   background: none;
   border: none;
   cursor: pointer;
   color: var(--move-text);
   min-width: 0;
-  transition: transform var(--move-duration-press) var(--move-ease-out);
+  transition:
+    transform var(--move-duration-press) var(--move-ease-out),
+    color var(--move-spring-ui-duration) var(--move-spring-ui);
+}
+
+.tweakers-move-track[data-active="true"] {
+  color: var(--move-bg);
+}
+
+.tweakers-move-track > :not(.tweakers-move-track-marker):not([data-hidden]) {
+  position: relative;
 }
 
 .tweakers-move-track:active { transform: scale(0.97); }
@@ -736,10 +755,31 @@
 }
 
 .tweakers-move-track-marker {
-  width: 5px;
-  height: 21px;
-  border-radius: 4px;
-  flex-shrink: 0;
+  position: absolute;
+  inset: 0;
+  border-radius: var(--move-radius);
+  clip-path: inset(
+    calc(50% - var(--move-track-marker-h) / 2)
+    calc(100% - var(--move-color-gap-small) - var(--move-track-marker-w))
+    calc(50% - var(--move-track-marker-h) / 2)
+    var(--move-color-gap-small)
+    round 4px
+  );
+  transition: clip-path var(--move-spring-ui-duration) var(--move-spring-ui);
+}
+
+.tweakers-move-track[data-active="true"] .tweakers-move-track-marker {
+  clip-path: inset(0 round var(--move-radius));
+}
+
+/* The page's number key, faint beside its name. */
+.tweakers-move-track-key {
+  margin-left: calc(var(--move-track-gap) / -2);
+  padding: 0;
+  font-family: var(--move-font-label);
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.4;
 }
 
 .tweakers-move-track-label {
@@ -750,7 +790,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
   text-align: left;
-  opacity: 0.22;
+  opacity: 0.55;
   max-width: 10ch;
   transition: opacity var(--move-duration-press) var(--move-ease-out);
 }
@@ -761,7 +801,7 @@
 
 .tweakers-move-track:hover .tweakers-move-track-label,
 .tweakers-move-track[data-steer] .tweakers-move-track-label {
-  opacity: 0.7;
+  opacity: 0.85;
 }
 
 .tweakers-move-track[data-active="true"]:hover .tweakers-move-track-label,
@@ -775,13 +815,13 @@
   width: 18px;
   height: 18px;
   flex-shrink: 0;
-  opacity: 0.22;
+  opacity: 0.55;
   transition: opacity var(--move-duration-press) var(--move-ease-out);
 }
 
 .tweakers-move-track[data-active="true"] .tweakers-move-track-icon { opacity: 1; }
 .tweakers-move-track:hover .tweakers-move-track-icon,
-.tweakers-move-track[data-steer] .tweakers-move-track-icon { opacity: 0.7; }
+.tweakers-move-track[data-steer] .tweakers-move-track-icon { opacity: 0.85; }
 .tweakers-move-track[data-active="true"]:hover .tweakers-move-track-icon,
 .tweakers-move-track[data-active="true"][data-steer] .tweakers-move-track-icon { opacity: 1; }
 
