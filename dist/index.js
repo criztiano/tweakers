@@ -9956,12 +9956,13 @@ function moveSteerNext(from, boxes, at2, dir) {
     if (b === from) return;
     const m = mid(b);
     let gap, across;
+    const along = dir.x ? (m.x - c.x) * dir.x : (m.y - c.y) * dir.y;
+    const aside = dir.x ? Math.abs(m.y - c.y) : Math.abs(m.x - c.x);
+    if (along <= 1 || along < aside * 0.5) return;
     if (dir.x) {
-      if ((m.x - c.x) * dir.x <= 1) return;
       gap = dir.x > 0 ? Math.max(0, b.left - from.right) : Math.max(0, from.left - b.right);
       across = at2.y < b.top ? b.top - at2.y : at2.y > b.bottom ? at2.y - b.bottom : 0;
     } else {
-      if ((m.y - c.y) * dir.y <= 1) return;
       gap = dir.y > 0 ? Math.max(0, b.top - from.bottom) : Math.max(0, from.top - b.bottom);
       across = at2.x < b.left ? b.left - at2.x : at2.x > b.right ? at2.x - b.right : 0;
     }
@@ -10089,17 +10090,18 @@ function attachMoveSteer(root) {
     const panel = root();
     if (!panel) return [];
     const top = panelTop() - 1;
+    const within = selected?.closest('[role="listbox"]') ?? null;
     return Array.from(panel.querySelectorAll(MOVE_STEER_TARGET)).filter((el) => {
       if (el.parentElement?.closest(MOVE_STEER_TARGET) || el.closest('[aria-hidden="true"], [inert]')) return false;
       const b = boxOf(el);
-      if (b.right - b.left < 4 || b.bottom - b.top < 4 || b.top < top) return false;
+      if (b.right - b.left < 4 || b.bottom - b.top < 4) return false;
       const list = el.closest('[role="listbox"]');
       if (list && list !== el) {
         const v = boxOf(list);
         const y = (b.top + b.bottom) / 2;
-        if (y < v.top || y > v.bottom) return false;
+        if (y < v.top || y > v.bottom) return list === within;
       }
-      return true;
+      return b.top >= top;
     });
   };
   const under = (p) => {

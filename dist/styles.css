@@ -1669,7 +1669,9 @@
   user-select: none;
 }
 
-.tweakers-move [data-steer]:not(.tweakers-move-dial) {
+/* A slot whose list covers it carries the ring too: its surface is hidden. */
+.tweakers-move [data-steer]:not(.tweakers-move-dial),
+.tweakers-move-dial[data-steer]:has(.tweakers-move-dial-screen) {
   outline: var(--move-color-stroke) solid var(--move-text);
   outline-offset: var(--move-color-stroke);
 }
@@ -2125,13 +2127,15 @@
 
 .tweakers-move-dial:hover .tweakers-move-dial-label,
 .tweakers-move-dial[data-steer] .tweakers-move-dial-label,
-.tweakers-move-dial[data-active] .tweakers-move-dial-label {
+.tweakers-move-dial[data-active] .tweakers-move-dial-label,
+.tweakers-move-dial[data-steer] .tweakers-move-dial-label {
   opacity: 0;
 }
 
 .tweakers-move-dial:hover .tweakers-move-dial-value,
 .tweakers-move-dial[data-steer] .tweakers-move-dial-value,
-.tweakers-move-dial[data-active] .tweakers-move-dial-value {
+.tweakers-move-dial[data-active] .tweakers-move-dial-value,
+.tweakers-move-dial[data-steer] .tweakers-move-dial-value {
   opacity: 1;
 }
 
@@ -2283,7 +2287,8 @@
 
 .tweakers-move-dial:hover .tweakers-move-dial-shape path,
 .tweakers-move-dial[data-steer] .tweakers-move-dial-shape path,
-.tweakers-move-dial[data-active] .tweakers-move-dial-shape path {
+.tweakers-move-dial[data-active] .tweakers-move-dial-shape path,
+.tweakers-move-dial[data-steer] .tweakers-move-dial-shape path {
   opacity: 1;
 }
 
@@ -2326,7 +2331,8 @@
 
 .tweakers-move-dial:hover .tweakers-move-dial-aspect-frame,
 .tweakers-move-dial[data-steer] .tweakers-move-dial-aspect-frame,
-.tweakers-move-dial[data-active] .tweakers-move-dial-aspect-frame {
+.tweakers-move-dial[data-active] .tweakers-move-dial-aspect-frame,
+.tweakers-move-dial[data-steer] .tweakers-move-dial-aspect-frame {
   border-color: var(--move-text);
 }
 
@@ -2450,7 +2456,8 @@
   transition: box-shadow 0.12s;
 }
 
-.tweakers-move-dial[data-active] .tweakers-move-dial-zero {
+.tweakers-move-dial[data-active] .tweakers-move-dial-zero,
+.tweakers-move-dial[data-steer] .tweakers-move-dial-zero {
   box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
 }
 
@@ -2466,7 +2473,8 @@
   transition: box-shadow 0.12s;
 }
 
-.tweakers-move-dial[data-active] .tweakers-move-dial-fill {
+.tweakers-move-dial[data-active] .tweakers-move-dial-fill,
+.tweakers-move-dial[data-steer] .tweakers-move-dial-fill {
   box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
 }
 
@@ -2538,7 +2546,8 @@
   opacity: 0.85;
 }
 
-.tweakers-move-dial[data-active] .tweakers-move-slot-shape path { opacity: 1; }
+.tweakers-move-dial[data-active] .tweakers-move-slot-shape path,
+.tweakers-move-dial[data-steer] .tweakers-move-slot-shape path { opacity: 1; }
 
 .tweakers-move-slot-dot {
   position: absolute;
@@ -3797,7 +3806,8 @@
   transition: box-shadow 0.12s;
 }
 
-.tweakers-move-dial[data-active] .tweakers-move-dial-handle {
+.tweakers-move-dial[data-active] .tweakers-move-dial-handle,
+.tweakers-move-dial[data-steer] .tweakers-move-dial-handle {
   box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
 }
 
@@ -3820,7 +3830,8 @@
   opacity: 1;
 }
 
-.tweakers-move-dial[data-active] .tweakers-move-dial-enum-cell[data-on] {
+.tweakers-move-dial[data-active] .tweakers-move-dial-enum-cell[data-on],
+.tweakers-move-dial[data-steer] .tweakers-move-dial-enum-cell[data-on] {
   box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
 }
 
@@ -3846,7 +3857,8 @@
   overflow: hidden;
 }
 
-.tweakers-move-dial[data-active] .tweakers-move-dial-screen[data-grow] {
+.tweakers-move-dial[data-active] .tweakers-move-dial-screen[data-grow],
+.tweakers-move-dial[data-steer] .tweakers-move-dial-screen[data-grow] {
   top: auto;
   height: min(var(--move-screen-full), 50vh);
   z-index: 6;
@@ -3914,7 +3926,8 @@
   transition: opacity 0.12s, visibility 0s 0.12s;
 }
 
-.tweakers-move-dial[data-active] .tweakers-move-dial-pop {
+.tweakers-move-dial[data-active] .tweakers-move-dial-pop,
+.tweakers-move-dial[data-steer] .tweakers-move-dial-pop {
   visibility: visible;
   opacity: 1;
   pointer-events: auto;
@@ -3933,6 +3946,7 @@
 
 /* A tile was clicked: folded away until the pointer leaves the slot. */
 .tweakers-move-dial[data-active] .tweakers-move-dial-pop[data-closed],
+.tweakers-move-dial[data-steer] .tweakers-move-dial-pop[data-closed],
 .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-pop[data-closed],
 .tweakers-move-dial:not([data-disabled])[data-steer] .tweakers-move-dial-pop[data-closed] {
   visibility: hidden;
@@ -4217,7 +4231,8 @@
   color: var(--move-text);
 }
 
-.tweakers-move-dial[data-active] .tweakers-move-xy-grid {
+.tweakers-move-dial[data-active] .tweakers-move-xy-grid,
+.tweakers-move-dial[data-steer] .tweakers-move-xy-grid {
   opacity: 0.14;
 }
 
@@ -4251,7 +4266,8 @@
   transition: box-shadow 0.12s;
 }
 
-.tweakers-move-dial[data-active] .tweakers-move-xy-dot {
+.tweakers-move-dial[data-active] .tweakers-move-xy-dot,
+.tweakers-move-dial[data-steer] .tweakers-move-xy-dot {
   box-shadow: 0 0 12px 0 rgba(222, 227, 201, 0.7);
 }
 
@@ -4275,7 +4291,8 @@
   transition: opacity 0.15s ease;
 }
 
-.tweakers-move-dial[data-active] .tweakers-move-xy-curve path {
+.tweakers-move-dial[data-active] .tweakers-move-xy-curve path,
+.tweakers-move-dial[data-steer] .tweakers-move-xy-curve path {
   opacity: 1;
 }
 
