@@ -130,47 +130,34 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
 - **The header keeps the arrow.** The page names and the header's buttons
   are small, and a pointer reaches them better: the hand's ground starts at
   the controls under the header, a step further below it.
-- **Below the controls' top there is no arrow.** Coming down into the panel the
-  arrow is gone at once: the hand takes the big slot nearest across on the
-  top row of slots, which lights and takes the hit, and the hand's travel
-  fades in over a moment (`MOVE_STEER_CATCH_MS`), so the move that brought
-  the arrow in never carries it on down the panel. The way out is up past
-  the top row of controls, or the pointer flung far over their top: the
-  arrow comes back just over the top, above the control the hand let go of, and moves only as the
-  mouse moves — a touch quicker for a moment (`MOVE_STEER_BUMP`), closing
-  on the real pointer within `MOVE_STEER_CLOSE` px of travel — drawn as near
-  to the system's own arrow as a page can, so the hand-over reads as one
-  arrow. (A page-drawn arrow everywhere would trail the real mouse by a
-  frame; the system keeps the arrow the rest of the time.) A still mouse
-  is a still arrow — no flight of its own — and the page's own arrow stays
-  hidden until the two meet. There is no way out to
-  the sides or the bottom: a veil over the window holds the real pointer
-  while the hand is in, and once the browser allows it the page captures
-  the pointer outright (pointer lock), so it can never wander off below
-  the window. A browser captures without a press only after the page let
-  go of the last capture itself, so the hand arms it on the first click
-  anywhere on the page (a capture taken and let go at once, after the click
-  is done); from then on every way in is captured without asking. If the
-  browser takes it away (Esc, another app), the next click arms it again.
-  A page can never move the pointer itself. On
-  the way out the real pointer comes back where the capture took it.
-- **The pointer is a hand on a control, not a place.** Its travel runs
-  quicker than the page's, across and up and down apart — the kit's own
-  **Panel** settings page holds both (Hand speed ←→ and ↑↓, 2× and 1.5× by
-  default, `MOVE_STEER_GAIN_X` / `_Y`), persisted like the rest of the page
-  — and it follows the pointer's speed (`moveSteerPace`): a slow, careful
-  move takes more travel per control, so it never slips past more than the
-  one it means. It leans and stretches the control it
-  holds the way it pulls; past a threshold — the same travel for every
-  control, or the whole of a list it points into — it lets go, lands in the
-  middle of the next control that way, and that control takes a knock and
-  lights up. Being in the hand never opens anything: a slot's list and a
-  curve's grid open only while ⌘ or two fingers turn it (or a finger is on
-  the Move's knob). In the hand everything reads the same: a big slot comes up to
-  the chip, a pad or a button a step brighter than it rests
-  (`--move-steer-lift`), and each glows from the inside
-  (`--move-steer-glow`) — no ring. At the panel's edge it stretches and stays. A rest lets the
-  tension go: the hand settles back in the middle (move-steer-core).
+- **Below the controls' top there is no arrow.** Coming down into the
+  panel's controls the arrow is gone and the hand takes the big slot
+  nearest across on the top row of slots, which lights and takes the hit.
+  Going back up past the top row, the hand lets go and the arrow is simply
+  back where the mouse is — always just above the controls. Nothing flies
+  and nothing captures the pointer: a veil over the window keeps the page
+  from hearing it while the hand is in.
+- **The hand is where the mouse is, magnified.** The hand point is the real
+  pointer mapped around where it came in (`moveSteerMap`) — 2× across and
+  1.5× up and down by default, set on the kit's own **Panel** settings page
+  (Hand speed ←→ and ↑↓, `MOVE_STEER_GAIN_X` / `_Y`), persisted like the rest
+  of the page. Never travel added up, so the hand and the real pointer can
+  never drift apart, and the same place of the mouse is always the same
+  place of the hand. Coming in, the hand lands in the middle of the top
+  slot, so the move that brought the mouse in has that slot's lower half to
+  spend. The hand holds a control until it is past its edge by a margin
+  that grows when the mouse moves slowly (`moveSteerMargin`), then lands on
+  the control it is over, or the nearest that way (`moveSteerSettle`); a
+  careful move never slips past more than the control it means. Pulling at
+  a control leans and stretches it toward the pull, and the control the
+  hand lands on takes a knock and lights up; a rest lets the tension go.
+  In the hand everything reads the same: a big slot comes up to the chip,
+  a pad or a button a step brighter than it rests (`--move-steer-lift`),
+  and each glows from the inside (`--move-steer-glow`) — no ring. Being in
+  the hand never opens anything: a slot's list and a curve's grid open
+  only while ⌘ or two fingers turn it (or a finger is on the Move's knob).
+  After a ⌘ turn or a drag the hand stays where it stood, and up and down
+  its map steers back toward the line it came in on, a share of each move.
 - **Every press lands on the hand.** A click and a drag reach the control
   in the hand, where the hand is; a drag runs at the page's pace from there.
 - **A list is one control.** The wheel's list, and a slot's list, are held
@@ -187,8 +174,8 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   the file's place is described there). While ⌘ is held the hand stays
   where it is and the mouse's travel turns the control, as a drag on it
   would — a dial turns from where it is, an option steps, a list walks.
-  When ⌘ comes up the control lets go; above the panel's top it also lets
-  the arrow out. A steer is never a tap: it never latches a chip, steps an
+  When ⌘ comes up the control lets go, and the hand is still where it
+  stood. A steer is never a tap: it never latches a chip, steps an
   option on its own or opens an editor. A click while ⌘ is held ends the
   steer and goes through as a click.
 - **Two hands split the travel.** A control the Move turns with its knob and
