@@ -10368,6 +10368,7 @@ function attachMoveSteer(root) {
   let lockOrigin = null;
   let silent = false;
   let releasing = false;
+  let arming = false;
   const captured = () => !!veil && document.pointerLockElement === veil;
   const capture = () => {
     if (!veil || captured() || typeof veil.requestPointerLock !== "function") return;
@@ -10387,7 +10388,15 @@ function attachMoveSteer(root) {
     document.exitPointerLock();
   };
   const onLockChange = () => {
-    if (captured()) return;
+    const held = document.pointerLockElement;
+    if (held) {
+      if (arming && held !== veil) {
+        arming = false;
+        releasing = true;
+        document.exitPointerLock();
+      }
+      return;
+    }
     silent = releasing;
     releasing = false;
     if (lockOrigin && real) real = { x: lockOrigin.x, y: lockOrigin.y, id: real.id };
@@ -10396,6 +10405,21 @@ function attachMoveSteer(root) {
   const onLockError = () => {
     silent = false;
     releasing = false;
+    arming = false;
+  };
+  const onArm = (e) => {
+    if (!e.isTrusted || silent || arming || inside || document.pointerLockElement) return;
+    const body = document.body;
+    if (typeof body?.requestPointerLock !== "function") return;
+    arming = true;
+    try {
+      const asked = body.requestPointerLock();
+      asked?.catch?.(() => {
+        arming = false;
+      });
+    } catch {
+      arming = false;
+    }
   };
   const enter = (at2) => {
     const all = targets();
@@ -10769,6 +10793,7 @@ function attachMoveSteer(root) {
   window.addEventListener("pointermove", onMove, true);
   document.addEventListener("pointerlockchange", onLockChange);
   document.addEventListener("pointerlockerror", onLockError);
+  window.addEventListener("click", onArm);
   window.addEventListener("pointerdown", onDown, true);
   window.addEventListener("pointerup", onUp, true);
   for (const type of ["mousedown", "mouseup", "click", "dblclick", "auxclick", "contextmenu"]) window.addEventListener(type, onMouse, true);
@@ -10784,6 +10809,7 @@ function attachMoveSteer(root) {
     window.removeEventListener("pointermove", onMove, true);
     document.removeEventListener("pointerlockchange", onLockChange);
     document.removeEventListener("pointerlockerror", onLockError);
+    window.removeEventListener("click", onArm);
     window.removeEventListener("pointerdown", onDown, true);
     window.removeEventListener("pointerup", onUp, true);
     for (const type of ["mousedown", "mouseup", "click", "dblclick", "auxclick", "contextmenu"]) window.removeEventListener(type, onMouse, true);
