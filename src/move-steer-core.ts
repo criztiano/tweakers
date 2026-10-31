@@ -77,20 +77,31 @@ export function moveSteerMap(hand: MoveSteerVec, from: MoveSteerVec, gain: MoveS
 }
 
 /**
- * The control the hand lands on, or null while it still holds `from`: it
- * holds it until it is past its edge by `margin`, then takes the control it
- * is over, else the nearest that way (`moveSteerNext`); `dir` is the way it
- * went, for the knock. Null at the panel's edge too.
+ * The control the hand lands on, or null while it still holds `from`. It
+ * holds a control until it is past its edge by `margin` — never more than
+ * half the control's own size beyond the quick margin, so a small pad holds
+ * as long as a pad can — then steps to the next control that way
+ * (`moveSteerNext`), one at a time: from there the same holds again, so a
+ * quick move runs through several and a slow one lands on the next, never
+ * past it. `dir` is the way of the last step, for the knock. Null at the
+ * panel's edge too.
  */
 export function moveSteerSettle(from: MoveSteerBox, boxes: readonly MoveSteerBox[], at: MoveSteerVec, margin: number) {
-  if (at.x >= from.left - margin && at.x <= from.right + margin && at.y >= from.top - margin && at.y <= from.bottom + margin) return null;
-  const ox = at.x < from.left ? at.x - from.left : at.x > from.right ? at.x - from.right : 0;
-  const oy = at.y < from.top ? at.y - from.top : at.y > from.bottom ? at.y - from.bottom : 0;
-  const dir = Math.abs(ox) >= Math.abs(oy) ? { x: Math.sign(ox), y: 0 } : { x: 0, y: Math.sign(oy) };
-  const over = boxes.findIndex((b) => b !== from && at.x >= b.left && at.x <= b.right && at.y >= b.top && at.y <= b.bottom);
-  if (over >= 0) return { index: over, dir };
-  const next = moveSteerNext(from, boxes, at, dir);
-  return next >= 0 ? { index: next, dir } : null;
+  let here = from;
+  let landed: { index: number; dir: MoveSteerVec } | null = null;
+  for (let step = 0; step < 8; step++) {
+    const mx = Math.min(margin, (here.right - here.left) / 2 + MOVE_STEER_MARGIN);
+    const my = Math.min(margin, (here.bottom - here.top) / 2 + MOVE_STEER_MARGIN);
+    if (at.x >= here.left - mx && at.x <= here.right + mx && at.y >= here.top - my && at.y <= here.bottom + my) break;
+    const ox = at.x < here.left ? at.x - here.left : at.x > here.right ? at.x - here.right : 0;
+    const oy = at.y < here.top ? at.y - here.top : at.y > here.bottom ? at.y - here.bottom : 0;
+    const dir = Math.abs(ox) / mx >= Math.abs(oy) / my ? { x: Math.sign(ox), y: 0 } : { x: 0, y: Math.sign(oy) };
+    const next = moveSteerNext(here, boxes, at, dir);
+    if (next < 0 || boxes[next] === from) break;
+    landed = { index: next, dir };
+    here = boxes[next]!;
+  }
+  return landed;
 }
 
 /**

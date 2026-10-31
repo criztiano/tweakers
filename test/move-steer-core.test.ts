@@ -70,6 +70,15 @@ describe('the hand holding and landing', () => {
     expect(moveSteerSettle(a, all, { x: 140, y: 80 }, 10)).toEqual({ index: 1, dir: { x: 1, y: 0 } });
   });
 
+  it('steps one row at a time down a stack of small pads, a slow move landing on the next', () => {
+    const r1 = box(0, 0, 240, 32), r2 = box(0, 36, 120, 32), r3 = box(0, 72, 240, 32);
+    const stack = [r1, r2, r3];
+    // The hand already as deep as the third row: slow, it stops on the second.
+    expect(moveSteerSettle(r1, stack, { x: 60, y: 80 }, moveSteerMargin(0))).toEqual({ index: 1, dir: { x: 0, y: 1 } });
+    // Quick, it runs on to the third.
+    expect(moveSteerSettle(r1, stack, { x: 60, y: 80 }, MOVE_STEER_MARGIN)).toEqual({ index: 2, dir: { x: 0, y: 1 } });
+  });
+
   it('lands on the nearest that way from a gap, and on nothing past the edge', () => {
     expect(moveSteerSettle(a, all, { x: 60, y: 166 }, 0)).toEqual({ index: 3, dir: { x: 0, y: 1 } });
     expect(moveSteerSettle(c, all, { x: 600, y: 80 }, 10)).toBeNull();
