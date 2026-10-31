@@ -32,6 +32,7 @@ import {
 } from './move-steer-core';
 import { TweakStore } from './store/TweakStore';
 import { MOVE_PANEL_SETTINGS } from './move-track-labels';
+import { playMoveSteerLock } from './move-steer-sound';
 
 /** What the hand can hold: a slot, a pad, a header button, a row of the wheel's list. */
 export const MOVE_STEER_TARGET = [
@@ -442,6 +443,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     const at = under(p);
     const target = at && held.contains(at) ? at : held;
     hold = { grip: { target, x: p.x, y: p.y, pressed: false, hands: hands(target) }, chip: null, shift: false, lock: { axis: null, x: 0, y: 0 } };
+    playMoveSteerLock();
     for (const el of springs.keys()) springs.get(el)!.vx = springs.get(el)!.vy = 0;
     wake();
   };
