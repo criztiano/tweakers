@@ -127,14 +127,16 @@ and the formatted readout. It retains every gesture and store subscription.
 The mouse can play the panel the way a hand plays the Move — no click, no
 hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
 
-- **Below the panel's top there is no arrow.** Coming down into the panel the
+- **The header keeps the arrow.** The page names and the header's buttons
+  are small, and a pointer reaches them better: the hand's ground starts at
+  the controls under the header, a step further below it.
+- **Below the controls' top there is no arrow.** Coming down into the panel the
   arrow is gone at once: the hand takes the big slot nearest across on the
   top row of slots, which lights and takes the hit, and the hand's travel
   fades in over a moment (`MOVE_STEER_CATCH_MS`), so the move that brought
   the arrow in never carries it on down the panel. The way out is up past
-  the top row (the header's buttons are a row like any other), or the
-  pointer flung far over the panel's top: the arrow comes back just over
-  the top, above the control the hand let go of, and moves only as the
+  the top row of controls, or the pointer flung far over their top: the
+  arrow comes back just over the top, above the control the hand let go of, and moves only as the
   mouse moves — a little quicker for a moment (`MOVE_STEER_BUMP`), closing
   on the real pointer within `MOVE_STEER_CLOSE` px of travel. A still mouse
   is a still arrow — no flight of its own — and the page's own arrow stays
@@ -151,8 +153,11 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   the way out the real pointer comes back where the capture took it.
 - **The pointer is a hand on a control, not a place.** Its travel runs
   quicker than the page's, across and up and down apart — the kit's own
-  **Panel** settings page holds both (Hand speed ←→ and ↑↓, 2.4× by
-  default, `MOVE_STEER_GAIN`), persisted like the rest of the page. It leans and stretches the control it
+  **Panel** settings page holds both (Hand speed ←→ and ↑↓, 2× and 1.5× by
+  default, `MOVE_STEER_GAIN_X` / `_Y`), persisted like the rest of the page
+  — and it follows the pointer's speed (`moveSteerPace`): a slow, careful
+  move takes more travel per control, so it never slips past more than the
+  one it means. It leans and stretches the control it
   holds the way it pulls; past a threshold — the same travel for every
   control, or the whole of a list it points into — it lets go, lands in the
   middle of the next control that way, and that control takes a knock and
@@ -162,8 +167,7 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   the chip, a pad or a button a step brighter than it rests
   (`--move-steer-lift`), and each glows from the inside
   (`--move-steer-glow`) — no ring. At the panel's edge it stretches and stays. A rest lets the
-  tension go: the hand settles back in the middle (move-steer-core). The
-  header's buttons and the wheel list's rows are controls like any other.
+  tension go: the hand settles back in the middle (move-steer-core).
 - **Every press lands on the hand.** A click and a drag reach the control
   in the hand, where the hand is; a drag runs at the page's pace from there.
 - **A list is one control.** The wheel's list, and a slot's list, are held
