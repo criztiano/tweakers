@@ -1743,53 +1743,6 @@
     -2px 2px 0 0 var(--move-bg), -3px 3px 0 0 var(--move-text);
 }
 
-/* The way in and out: the arrow, sucked into the control; the dot, shot
-   back out of it, and the arrow again, closing on the real pointer — the
-   page's own arrow hidden until it has. They fly on their own layer, over
-   everything and catching nothing. */
-.tweakers-move-steer-sky {
-  position: fixed;
-  inset: 0;
-  z-index: 2147483001;
-  pointer-events: none;
-}
-
-:root[data-move-steer="out"],
-:root[data-move-steer="out"] * {
-  cursor: none !important;
-}
-
-.tweakers-move-steer-ghost {
-  position: absolute;
-  top: 0;
-  left: 0;
-  pointer-events: none;
-  will-change: transform, opacity;
-}
-
-/* The system's arrow, as near as a page can draw it: black, a white
-   edge, a soft shadow; its tip on the point. */
-.tweakers-move-steer-arrow svg {
-  display: block;
-  width: 16px;
-  height: 24px;
-  margin: -1.5px 0 0 -1.5px;
-  fill: black;
-  stroke: white;
-  stroke-width: 2px;
-  stroke-linejoin: round;
-  paint-order: stroke;
-  filter: drop-shadow(0 1px 1.5px color-mix(in srgb, black 45%, transparent));
-}
-
-.tweakers-move-steer-dot {
-  width: 10px;
-  height: 10px;
-  margin: -5px 0 0 -5px;
-  border-radius: 50%;
-  background: var(--move-text);
-}
-
 /* Grouped slots (`moveSlotGroups`): the container carries the slot surface
    across its columns and the gaps between them, so the slots on it read as
    one; each gap gets a 2 × 48px rounded divider. It sits under the slots,

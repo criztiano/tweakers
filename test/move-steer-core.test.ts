@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  MOVE_STEER_REACH_MAX, MOVE_STEER_REACH_MIN, MOVE_STEER_RUBBER, moveSteerNext, moveSteerPose, moveSteerReach,
-  moveSteerSpring, moveSteerTravel, moveSteerGlide, moveSteerGlideRate, moveSteerPace, MOVE_STEER_CRAWL, MOVE_STEER_FULL_SPEED, MOVE_STEER_BUMP, MOVE_STEER_CLOSE, type MoveSteerBox,
+  MOVE_STEER_REACH_MAX, MOVE_STEER_REACH_MIN, MOVE_STEER_MARGIN, MOVE_STEER_SLOW_MARGIN, MOVE_STEER_FULL_SPEED,
+  moveSteerNext, moveSteerPose, moveSteerReach, moveSteerSpring, moveSteerMap, moveSteerMargin, moveSteerSettle, type MoveSteerBox,
 } from '../src/move-steer-core';
 
 const box = (left: number, top: number, w: number, h: number): MoveSteerBox => ({ left, top, right: left + w, bottom: top + h });
@@ -32,34 +32,43 @@ describe('the next control the hand lands on', () => {
   });
 });
 
-describe('how far the hand goes before it lets go', () => {
-  it('is one pace for any control, and the whole of a control it points into', () => {
-    expect(moveSteerReach(a, false)).toEqual({ x: MOVE_STEER_REACH_MAX, y: MOVE_STEER_REACH_MAX });
-    expect(moveSteerReach(p1, false)).toEqual({ x: MOVE_STEER_REACH_MAX, y: MOVE_STEER_REACH_MIN });
-    expect(moveSteerReach(a, true)).toEqual({ x: 70, y: 90 });
+describe('the full pull', () => {
+  it('is one pace for any control', () => {
+    expect(moveSteerReach(a)).toEqual({ x: MOVE_STEER_REACH_MAX, y: MOVE_STEER_REACH_MAX });
+    expect(moveSteerReach(p1)).toEqual({ x: MOVE_STEER_REACH_MAX, y: MOVE_STEER_REACH_MIN });
   });
 });
 
-describe('the hand travelling', () => {
-  const reach = () => ({ x: 70, y: 70 });
-  it('holds while the travel stays under the threshold', () => {
-    expect(moveSteerTravel({ x: 60, y: 0 }, reach, () => true)).toEqual({ offset: { x: 60, y: 0 }, passes: [] });
+describe('the hand on the pointer', () => {
+  const gain = { x: 2, y: 1.5 };
+  it('is where the pointer is, magnified around where it came in', () => {
+    expect(moveSteerMap({ x: 100, y: 80 }, { x: 100, y: 0 }, gain, { x: 100, y: 0 })).toEqual({ x: 100, y: 80 });
+    expect(moveSteerMap({ x: 100, y: 80 }, { x: 100, y: 0 }, gain, { x: 130, y: 20 })).toEqual({ x: 160, y: 110 });
   });
 
-  it('lets go past it, lands in the middle of the next control and carries the rest on', () => {
-    const r = moveSteerTravel({ x: 80, y: 5 }, reach, () => true);
-    expect(r.passes).toEqual([{ x: 1, y: 0 }]);
-    expect(r.offset).toEqual({ x: 10, y: 0 });
+  it('never drifts: back where the pointer was, back where the hand was', () => {
+    const start = { x: 100, y: 80 }, from = { x: 100, y: 0 };
+    let p = from;
+    for (const step of [{ x: 40, y: 10 }, { x: -90, y: 30 }, { x: 50, y: -40 }]) p = { x: p.x + step.x, y: p.y + step.y };
+    expect(moveSteerMap(start, from, gain, p)).toEqual(start);
+  });
+});
+
+describe('the hand holding and landing', () => {
+  it('holds its control past the edge by the margin, then lands on the control it is over', () => {
+    expect(moveSteerSettle(a, all, { x: 125, y: 80 }, 10)).toBeNull();
+    expect(moveSteerSettle(a, all, { x: 140, y: 80 }, 10)).toEqual({ index: 1, dir: { x: 1, y: 0 } });
   });
 
-  it('passes several controls on a flick', () => {
-    expect(moveSteerTravel({ x: -150, y: 0 }, reach, () => true).passes).toHaveLength(2);
+  it('lands on the nearest that way from a gap, and on nothing past the edge', () => {
+    expect(moveSteerSettle(a, all, { x: 60, y: 166 }, 0)).toEqual({ index: 3, dir: { x: 0, y: 1 } });
+    expect(moveSteerSettle(c, all, { x: 600, y: 80 }, 10)).toBeNull();
   });
 
-  it('stretches at the panel edge but never passes it', () => {
-    const r = moveSteerTravel({ x: 400, y: 0 }, reach, () => false);
-    expect(r.passes).toEqual([]);
-    expect(r.offset.x).toBe(70 * MOVE_STEER_RUBBER);
+  it('holds on longer when the pointer crawls', () => {
+    expect(moveSteerMargin(MOVE_STEER_FULL_SPEED)).toBe(MOVE_STEER_MARGIN);
+    expect(moveSteerMargin(0)).toBe(MOVE_STEER_MARGIN + MOVE_STEER_SLOW_MARGIN);
+    expect(moveSteerSettle(a, all, { x: 140, y: 80 }, moveSteerMargin(0))).toBeNull();
   });
 });
 
@@ -78,36 +87,5 @@ describe('the lean', () => {
     while (moveSteerSpring(s, { x: 0, y: 0 }, 1 / 60) && frames < 600) frames++;
     expect(frames).toBeLessThan(120);
     expect(Math.abs(s.x)).toBeLessThan(0.01);
-  });
-});
-
-describe('the way in and out', () => {
-  it('moves the arrow only as the pointer moves, a little more at first', () => {
-    const at = { x: 0, y: 0 }, real = { x: 300, y: 0 };
-    expect(moveSteerGlide(at, real, { x: 0, y: 0 }, 0, 1)).toEqual(at);
-    expect(moveSteerGlide(at, real, { x: 0, y: -10 }, 0, 0)).toEqual({ x: 0, y: -10 * (1 + MOVE_STEER_BUMP) });
-    expect(moveSteerGlide(at, real, { x: 0, y: -10 }, 5000, 0).y).toBeCloseTo(-10, 5);
-  });
-
-  it('gets where it is going within its travel, whatever the gap', () => {
-    let at = { x: 0, y: 0 };
-    const real = { x: 300, y: -40 };
-    const rate = moveSteerGlideRate(Math.hypot(real.x - at.x, real.y - at.y));
-    const d = { x: 0, y: -8 };
-    for (let travel = 0; travel < MOVE_STEER_CLOSE + 8; travel += 8) {
-      real.y += d.y;
-      at = moveSteerGlide(at, real, d, 1000, rate);
-    }
-    expect(Math.hypot(at.x - real.x, at.y - real.y)).toBeLessThan(1);
-  });
-});
-
-describe('the hand following the pointer\'s speed', () => {
-  it('crawls when the pointer crawls, and takes its full pace when it moves', () => {
-    expect(moveSteerPace(0)).toBe(MOVE_STEER_CRAWL);
-    expect(moveSteerPace(MOVE_STEER_FULL_SPEED)).toBe(1);
-    expect(moveSteerPace(5)).toBe(1);
-    expect(moveSteerPace(MOVE_STEER_FULL_SPEED / 2)).toBeGreaterThan(MOVE_STEER_CRAWL);
-    expect(moveSteerPace(MOVE_STEER_FULL_SPEED / 2)).toBeLessThan(1);
   });
 });

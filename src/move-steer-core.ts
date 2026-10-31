@@ -2,40 +2,36 @@
  * The steering hand's physics, apart from the page (move-steer draws it).
  *
  * Inside the panel the pointer is not a place but a hand on a control. The
- * hand's travel builds tension on the control it holds — the control leans
- * and stretches the way the hand pulls — and once the travel passes the
- * control's threshold the hand lets go and lands on the next control that
- * way, which takes the hit. Let the hand rest and the tension goes: the
- * hand settles back in the middle of its control.
+ * hand is where the real pointer is, magnified around where it came in
+ * (`moveSteerMap`) — never travel added up, so the hand and the real pointer
+ * can never drift apart, and the real pointer is where the arrow comes back.
+ * The hand holds its control until it is past the control's edge by a
+ * margin that grows when the pointer moves slowly (`moveSteerMargin`), then
+ * lands on the control it is over, or the nearest that way
+ * (`moveSteerSettle`), which takes the hit. Pulling at a control leans and
+ * stretches it; a rest lets the tension go.
  */
 
 /** The hand's travel per pointer pixel, across and up and down: the panel goes by quicker than the page (Cri's feel test, 2× and 1.5×). */
 export const MOVE_STEER_GAIN_X = 2;
 export const MOVE_STEER_GAIN_Y = 1.5;
 
-/** The pointer speed, in px/ms, at which the hand takes its full pace. */
-export const MOVE_STEER_FULL_SPEED = 0.6;
-/** The share of its pace the hand keeps at a crawl. */
-export const MOVE_STEER_CRAWL = 0.35;
-
-/**
- * The hand's pace for a pointer `speed` (px/ms): a slow, careful move
- * takes more travel per control, so it never slips past more than the
- * one it means; a quick one takes the full pace. Eased in between.
- */
-export function moveSteerPace(speed: number) {
-  const t = Math.min(1, Math.max(0, speed / MOVE_STEER_FULL_SPEED));
-  return MOVE_STEER_CRAWL + (1 - MOVE_STEER_CRAWL) * t * t * (3 - 2 * t);
-}
-/** How far past a control's edge, in hand pixels, the hand still holds it. */
+/** How far past a control's edge, in hand pixels, a quick hand still holds it… */
 export const MOVE_STEER_MARGIN = 10;
-/** The travel from a control's middle that lets go of it, whatever its size, in hand pixels. */
+/** …and how much further a crawling one does, so a careful move never slips past more than the control it means. */
+export const MOVE_STEER_SLOW_MARGIN = 50;
+/** The pointer speed, in px/ms, from which the hand holds by the quick margin alone. */
+export const MOVE_STEER_FULL_SPEED = 0.6;
+
+/** How far past its control's edge the hand still holds it, for a pointer `speed` (px/ms), eased. */
+export function moveSteerMargin(speed: number) {
+  const t = Math.min(1, Math.max(0, speed / MOVE_STEER_FULL_SPEED));
+  return MOVE_STEER_MARGIN + MOVE_STEER_SLOW_MARGIN * (1 - t * t * (3 - 2 * t));
+}
+
+/** The tension a pull needs to read in full, from a control's middle, in hand pixels. */
 export const MOVE_STEER_REACH_MIN = 34;
 export const MOVE_STEER_REACH_MAX = 70;
-/** At the panel's edge the hand stretches this far past the reach, and no further. */
-export const MOVE_STEER_RUBBER = 1.3;
-/** Coming in, the hand's travel fades in over about this long, in ms, so the move that brought the arrow in does not carry on. */
-export const MOVE_STEER_CATCH_MS = 120;
 /** A pause this long, in ms, lets the tension go. */
 export const MOVE_STEER_REST_MS = 110;
 
@@ -44,17 +40,36 @@ export type MoveSteerVec = { x: number; y: number };
 
 const mid = (b: MoveSteerBox): MoveSteerVec => ({ x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 });
 
-/**
- * How far the hand may travel from a control's middle before it lets go, per
- * axis. A control the hand points into (a list, a grid of tiles) is held all
- * the way to its edge, so every row in it can be reached; any other control
- * lets go at the same travel whatever its size, so the panel reads at one pace.
- */
-export function moveSteerReach(b: MoveSteerBox, points: boolean): MoveSteerVec {
-  const half = { x: (b.right - b.left) / 2 + MOVE_STEER_MARGIN, y: (b.bottom - b.top) / 2 + MOVE_STEER_MARGIN };
-  if (points) return half;
+/** How far a pull from a control's middle reads as full tension, per axis: one pace for every control. */
+export function moveSteerReach(b: MoveSteerBox): MoveSteerVec {
   const clamp = (v: number) => Math.min(MOVE_STEER_REACH_MAX, Math.max(MOVE_STEER_REACH_MIN, v));
-  return { x: clamp(half.x), y: clamp(half.y) };
+  return { x: clamp((b.right - b.left) / 2 + MOVE_STEER_MARGIN), y: clamp((b.bottom - b.top) / 2 + MOVE_STEER_MARGIN) };
+}
+
+/**
+ * Where the hand is for the real pointer `at`: the hand point `hand` where
+ * the pointer was `from`, the pointer's way since magnified by `gain`. The
+ * same pointer place is always the same hand place.
+ */
+export function moveSteerMap(hand: MoveSteerVec, from: MoveSteerVec, gain: MoveSteerVec, at: MoveSteerVec): MoveSteerVec {
+  return { x: hand.x + (at.x - from.x) * gain.x, y: hand.y + (at.y - from.y) * gain.y };
+}
+
+/**
+ * The control the hand lands on, or null while it still holds `from`: it
+ * holds it until it is past its edge by `margin`, then takes the control it
+ * is over, else the nearest that way (`moveSteerNext`); `dir` is the way it
+ * went, for the knock. Null at the panel's edge too.
+ */
+export function moveSteerSettle(from: MoveSteerBox, boxes: readonly MoveSteerBox[], at: MoveSteerVec, margin: number) {
+  if (at.x >= from.left - margin && at.x <= from.right + margin && at.y >= from.top - margin && at.y <= from.bottom + margin) return null;
+  const ox = at.x < from.left ? at.x - from.left : at.x > from.right ? at.x - from.right : 0;
+  const oy = at.y < from.top ? at.y - from.top : at.y > from.bottom ? at.y - from.bottom : 0;
+  const dir = Math.abs(ox) >= Math.abs(oy) ? { x: Math.sign(ox), y: 0 } : { x: 0, y: Math.sign(oy) };
+  const over = boxes.findIndex((b) => b !== from && at.x >= b.left && at.x <= b.right && at.y >= b.top && at.y <= b.bottom);
+  if (over >= 0) return { index: over, dir };
+  const next = moveSteerNext(from, boxes, at, dir);
+  return next >= 0 ? { index: next, dir } : null;
 }
 
 /**
@@ -90,37 +105,6 @@ export function moveSteerNext(from: MoveSteerBox, boxes: readonly MoveSteerBox[]
   return best;
 }
 
-/**
- * The hand's travel, in hand pixels from the middle of what it holds, after
- * a move: where it now is, and every control it let go of on the way (`dir`
- * of each pass). A fast flick passes several. `next` answers the control
- * that way, or null at the panel's edge, where the hand stretches but stays.
- */
-export function moveSteerTravel(
-  offset: MoveSteerVec, reach: (step: number) => MoveSteerVec,
-  next: (dir: MoveSteerVec, step: number, at: MoveSteerVec) => boolean,
-) {
-  const o = { ...offset };
-  const passes: MoveSteerVec[] = [];
-  for (let step = 0; step < 8; step++) {
-    const r = reach(step);
-    const ux = Math.abs(o.x) / r.x;
-    const uy = Math.abs(o.y) / r.y;
-    if (ux <= 1 && uy <= 1) break;
-    const dir = ux >= uy ? { x: Math.sign(o.x), y: 0 } : { x: 0, y: Math.sign(o.y) };
-    if (!next(dir, step, o)) {
-      o.x = Math.max(-r.x * MOVE_STEER_RUBBER, Math.min(r.x * MOVE_STEER_RUBBER, o.x));
-      o.y = Math.max(-r.y * MOVE_STEER_RUBBER, Math.min(r.y * MOVE_STEER_RUBBER, o.y));
-      break;
-    }
-    passes.push(dir);
-    // The hand lands in the middle of the next control, the travel past the
-    // threshold carried on.
-    if (dir.x) { o.x -= dir.x * r.x; o.y = 0; } else { o.y -= dir.y * r.y; o.x = 0; }
-  }
-  return { offset: o, passes };
-}
-
 /** A control's lean and stretch for a tension `u` (−1…1 at the threshold, per axis). */
 export function moveSteerPose(u: MoveSteerVec, size: MoveSteerVec) {
   const ax = Math.tanh(u.x * 1.1);
@@ -153,32 +137,3 @@ export function moveSteerSpring(s: MoveSteerSpring, to: MoveSteerVec, dt: number
 
 /** The knock a control takes when the hand lands on it, in tension per second. */
 export const MOVE_STEER_KNOCK = 14;
-
-/* ── the way in and out: the arrow glides ── */
-
-/** Right after the arrow comes out, it takes this much more of the pointer's own travel… */
-export const MOVE_STEER_BUMP = 0.25;
-/** …fading to none over about this long, in ms. */
-export const MOVE_STEER_BUMP_MS = 180;
-/** The pointer travel, in px, over which the arrow closes on the real pointer. */
-export const MOVE_STEER_CLOSE = 50;
-
-/**
- * The arrow on its way out, one pointer move on: it moves only as the
- * pointer moves — the pointer's own travel `d`, a little more just after it
- * came out (the bump, fading in `MOVE_STEER_BUMP_MS`) — and each move also
- * closes `rate` px of the gap to `to`, the real pointer, per px of travel
- * (`moveSteerGlideRate`), so the two meet after `MOVE_STEER_CLOSE` px. No path
- * of its own, no time of its own: a still pointer is a still arrow.
- */
-export function moveSteerGlide(at: MoveSteerVec, to: MoveSteerVec, d: MoveSteerVec, sinceMs: number, rate: number): MoveSteerVec {
-  const k = 1 + MOVE_STEER_BUMP * Math.exp(-sinceMs / MOVE_STEER_BUMP_MS);
-  const p = { x: at.x + d.x * k, y: at.y + d.y * k };
-  const gap = Math.hypot(to.x - p.x, to.y - p.y);
-  if (!rate || !gap) return p;
-  const c = Math.min(1, (rate * Math.hypot(d.x, d.y)) / gap);
-  return { x: p.x + (to.x - p.x) * c, y: p.y + (to.y - p.y) * c };
-}
-
-/** How fast the arrow closes a `gap`: px of gap per px of travel. */
-export const moveSteerGlideRate = (gap: number) => Math.max(0.25, gap / MOVE_STEER_CLOSE);
