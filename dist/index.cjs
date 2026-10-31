@@ -3244,9 +3244,9 @@ function clampOklchToSrgb(oklch) {
   if (inSrgbGamut(l, c, h)) return { l, c, h, a: clamp012(oklch.a) };
   let lo = 0, hi = c;
   for (let i = 0; i < 24; i++) {
-    const mid = (lo + hi) / 2;
-    if (inSrgbGamut(l, mid, h)) lo = mid;
-    else hi = mid;
+    const mid2 = (lo + hi) / 2;
+    if (inSrgbGamut(l, mid2, h)) lo = mid2;
+    else hi = mid2;
   }
   return { l, c: lo, h, a: clamp012(oklch.a) };
 }
@@ -10465,11 +10465,108 @@ function moveShapePath(points) {
   return points.map((v, i) => `${i ? "L" : "M"} ${(i / (points.length - 1) * 100).toFixed(2)} ${((1 - v) * 100).toFixed(2)}`).join(" ");
 }
 
+// src/move-steer-core.ts
+var MOVE_STEER_GAIN = 2.4;
+var MOVE_STEER_MARGIN = 10;
+var MOVE_STEER_REACH_MIN = 34;
+var MOVE_STEER_REACH_MAX = 70;
+var MOVE_STEER_RUBBER = 1.3;
+var MOVE_STEER_REST_MS = 110;
+var mid = (b) => ({ x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 });
+function moveSteerReach(b, points) {
+  const half = { x: (b.right - b.left) / 2 + MOVE_STEER_MARGIN, y: (b.bottom - b.top) / 2 + MOVE_STEER_MARGIN };
+  if (points) return half;
+  const clamp14 = (v) => Math.min(MOVE_STEER_REACH_MAX, Math.max(MOVE_STEER_REACH_MIN, v));
+  return { x: clamp14(half.x), y: clamp14(half.y) };
+}
+function moveSteerNext(from, boxes, at2, dir) {
+  const c = mid(from);
+  let best = -1;
+  let score = Infinity;
+  boxes.forEach((b, i) => {
+    if (b === from) return;
+    const m = mid(b);
+    let gap, across;
+    if (dir.x) {
+      if ((m.x - c.x) * dir.x <= 1) return;
+      gap = dir.x > 0 ? Math.max(0, b.left - from.right) : Math.max(0, from.left - b.right);
+      across = at2.y < b.top ? b.top - at2.y : at2.y > b.bottom ? at2.y - b.bottom : 0;
+    } else {
+      if ((m.y - c.y) * dir.y <= 1) return;
+      gap = dir.y > 0 ? Math.max(0, b.top - from.bottom) : Math.max(0, from.top - b.bottom);
+      across = at2.x < b.left ? b.left - at2.x : at2.x > b.right ? at2.x - b.right : 0;
+    }
+    const s = gap + across * 2;
+    if (s < score) {
+      score = s;
+      best = i;
+    }
+  });
+  return best;
+}
+function moveSteerTravel(offset, reach, next) {
+  const o = { ...offset };
+  const passes = [];
+  for (let step = 0; step < 8; step++) {
+    const r = reach(step);
+    const ux = Math.abs(o.x) / r.x;
+    const uy = Math.abs(o.y) / r.y;
+    if (ux <= 1 && uy <= 1) break;
+    const dir = ux >= uy ? { x: Math.sign(o.x), y: 0 } : { x: 0, y: Math.sign(o.y) };
+    if (!next(dir, step, o)) {
+      o.x = Math.max(-r.x * MOVE_STEER_RUBBER, Math.min(r.x * MOVE_STEER_RUBBER, o.x));
+      o.y = Math.max(-r.y * MOVE_STEER_RUBBER, Math.min(r.y * MOVE_STEER_RUBBER, o.y));
+      break;
+    }
+    passes.push(dir);
+    if (dir.x) {
+      o.x -= dir.x * r.x;
+      o.y = 0;
+    } else {
+      o.y -= dir.y * r.y;
+      o.x = 0;
+    }
+  }
+  return { offset: o, passes };
+}
+function moveSteerPose(u, size) {
+  const ax = Math.tanh(u.x * 1.1);
+  const ay = Math.tanh(u.y * 1.1);
+  const sx = 1 + 0.045 * Math.abs(ax) - 0.02 * Math.abs(ay);
+  const sy = 1 + 0.045 * Math.abs(ay) - 0.02 * Math.abs(ax);
+  return {
+    tx: ax * 3 + Math.sign(ax) * (size.x * (sx - 1)) / 2,
+    ty: ay * 3 + Math.sign(ay) * (size.y * (sy - 1)) / 2,
+    sx,
+    sy
+  };
+}
+var STIFFNESS = 520;
+var DAMPING = 2 * 0.62 * Math.sqrt(STIFFNESS);
+function moveSteerSpring(s, to, dt) {
+  const step = Math.min(dt, 1 / 30);
+  s.vx += (STIFFNESS * (to.x - s.x) - DAMPING * s.vx) * step;
+  s.vy += (STIFFNESS * (to.y - s.y) - DAMPING * s.vy) * step;
+  s.x += s.vx * step;
+  s.y += s.vy * step;
+  return Math.abs(to.x - s.x) + Math.abs(to.y - s.y) > 2e-3 || Math.abs(s.vx) + Math.abs(s.vy) > 0.02;
+}
+var MOVE_STEER_KNOCK = 14;
+
 // src/move-steer.ts
-var MOVE_STEER_SLOT = '.tweakers-move-dial:not([data-empty]):not([data-kind="blank"]), .tweakers-move-pad:not([data-empty="true"]):not(:disabled)';
-var MOVE_STEER_AREA = ".tweakers-move-grid:not([data-presets])";
+var MOVE_STEER_TARGET = [
+  '.tweakers-move-dial:not([data-empty]):not([data-kind="blank"])',
+  '.tweakers-move-pad:not([data-empty="true"])',
+  "button:not(:disabled)",
+  '[role="option"]',
+  '[role="tab"]'
+].join(", ");
+var POINTS_INTO = ".tweakers-list-screen-row, .tweakers-move-dial-tile, .tweakers-move-dial-arrows-plate";
 var MOVE_STEER_AXIS_SLOP = 4;
-var MOVE_STEER_DOT_MS = 450;
+var CLICK_SLOP = 3;
+var SUCK_MS = 240;
+var SHOOT_MS = 210;
+var sent = /* @__PURE__ */ new WeakSet();
 var steered = /* @__PURE__ */ new WeakSet();
 var isMoveSteer = (e) => steered.has("nativeEvent" in e ? e.nativeEvent : e);
 var MAC = typeof navigator !== "undefined" && /Mac|iPhone|iPad/.test(navigator.platform || navigator.userAgent);
@@ -10487,75 +10584,297 @@ function moveSteerAxis(lock, dx, dy) {
 }
 var hands = (el) => el.closest('[data-hands="2"]') ? 2 : 1;
 var editable = (el) => !!el && (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el.isContentEditable);
-function attachMoveSteer(root, dot) {
+var boxOf = (el) => {
+  const r = el.getBoundingClientRect();
+  return { left: r.left, top: r.top, right: r.right, bottom: r.bottom };
+};
+var middle = (b) => ({ x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 });
+var reduced = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+var ARROW = '<svg viewBox="0 0 14 20" aria-hidden="true"><path d="M1 1v15.5l4-3.8 2.7 6.1 2.6-1.1-2.6-6h5.6z"/></svg>';
+function attachMoveSteer(root) {
   if (typeof window === "undefined" || typeof document === "undefined") return () => {
   };
-  let area = null;
+  let veil = null;
+  let inside = false;
   let selected = null;
+  let offset = { x: 0, y: 0 };
+  let real = null;
+  let lastMove = 0;
   let hold = null;
-  let last = null;
-  let dotTimer;
-  const select = (slot) => {
-    if (slot === selected) return;
-    selected?.removeAttribute("data-steer");
-    selected = slot;
-    selected?.setAttribute("data-steer", "");
+  let press = null;
+  let pressTravel = 0;
+  let hovered = null;
+  const springs = /* @__PURE__ */ new Map();
+  let frame = 0;
+  let then = 0;
+  let lastHand = { x: 0, y: 0 };
+  const panelTop = () => root()?.getBoundingClientRect().top ?? Infinity;
+  const hand = () => {
+    if (!selected?.isConnected) return lastHand;
+    const m = middle(boxOf(selected));
+    lastHand = { x: m.x + offset.x, y: m.y + offset.y };
+    return lastHand;
   };
-  const hideDot = () => {
-    clearTimeout(dotTimer);
-    dot()?.removeAttribute("data-on");
+  const points = (el) => !!el.querySelector(POINTS_INTO);
+  const targets = () => {
+    const panel = root();
+    if (!panel) return [];
+    const top = panelTop() - 1;
+    return Array.from(panel.querySelectorAll(MOVE_STEER_TARGET)).filter((el) => {
+      if (el.parentElement?.closest(MOVE_STEER_TARGET) || el.closest('[aria-hidden="true"], [inert]')) return false;
+      const b = boxOf(el);
+      if (b.right - b.left < 4 || b.bottom - b.top < 4 || b.top < top) return false;
+      const list = el.closest('[role="listbox"]');
+      if (list && list !== el) {
+        const v = boxOf(list);
+        const y = (b.top + b.bottom) / 2;
+        if (y < v.top || y > v.bottom) return false;
+      }
+      return true;
+    });
   };
-  const showDot = (x, y) => {
-    const el = dot();
-    if (!el) return;
-    const base = (el.offsetParent ?? el.parentElement)?.getBoundingClientRect();
-    el.style.transform = `translate(${x - (base?.left ?? 0)}px, ${y - (base?.top ?? 0)}px)`;
-    el.setAttribute("data-on", "");
-    clearTimeout(dotTimer);
-    dotTimer = setTimeout(hideDot, MOVE_STEER_DOT_MS);
+  const under = (p) => {
+    const panel = root();
+    for (const el of document.elementsFromPoint(p.x, p.y)) {
+      if (el === veil || veil?.contains(el)) continue;
+      return panel?.contains(el) ? el : null;
+    }
+    return null;
   };
-  const leave = () => {
-    area?.removeAttribute("data-steering");
-    area = null;
-    select(null);
-    hideDot();
-  };
-  const send = (h, g, type, shift) => {
-    const e = new PointerEvent(type, {
-      bubbles: true,
+  const send = (target, type, p, init = {}, steer2 = false) => {
+    const Kind = type.startsWith("pointer") ? PointerEvent : type === "wheel" ? WheelEvent : MouseEvent;
+    const e = new Kind(type, {
+      bubbles: type !== "pointerenter" && type !== "pointerleave",
       cancelable: true,
       composed: true,
-      clientX: g.x,
-      clientY: g.y,
-      pointerId: h.pointerId,
+      clientX: p.x,
+      clientY: p.y,
+      pointerId: real?.id ?? 1,
       pointerType: "mouse",
       isPrimary: true,
-      button: type === "pointermove" ? -1 : 0,
-      buttons: type === "pointercancel" ? 0 : 1,
-      shiftKey: shift
+      ...init
     });
-    steered.add(e);
-    if (type === "pointerdown") g.pressed = true;
-    g.target.dispatchEvent(e);
+    sent.add(e);
+    if (steer2) steered.add(e);
+    target.dispatchEvent(e);
+    return e;
   };
-  const release = (h, g) => {
+  const hover = () => {
+    const p = hand();
+    const el = inside && selected ? under(p) ?? selected : null;
+    if (el !== hovered) {
+      if (hovered?.isConnected) send(hovered, "pointerout", p, { button: -1, buttons: 0, relatedTarget: el });
+      if (el) send(el, "pointerover", p, { button: -1, buttons: 0, relatedTarget: hovered });
+      hovered = el;
+    }
+    if (el) send(el, "pointermove", p, { button: -1, buttons: 0 });
+  };
+  const tension = (el) => {
+    if (reduced() || el !== selected || hold || press || performance.now() - lastMove > MOVE_STEER_REST_MS) return { x: 0, y: 0 };
+    const b = boxOf(el);
+    const r = moveSteerReach(b, points(el));
+    if (!points(el)) return { x: offset.x / r.x, y: offset.y / r.y };
+    const edge = (o, reach) => Math.sign(o) * Math.max(0, Math.abs(o) - (reach - 24)) / 24;
+    return { x: edge(offset.x, r.x), y: edge(offset.y, r.y) };
+  };
+  const pose = (el, s) => {
+    const style = el.style;
+    if (!style) return;
+    if (Math.abs(s.x) + Math.abs(s.y) < 2e-3) {
+      style.translate = "";
+      style.scale = "";
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    const p = moveSteerPose(s, { x: r.width, y: r.height });
+    style.translate = `${p.tx.toFixed(2)}px ${p.ty.toFixed(2)}px`;
+    style.scale = `${p.sx.toFixed(4)} ${p.sy.toFixed(4)}`;
+  };
+  const tick = (now) => {
+    frame = 0;
+    const dt = then ? (now - then) / 1e3 : 1 / 60;
+    then = now;
+    if (inside && selected && !hold && !press && now - lastMove > MOVE_STEER_REST_MS && !points(selected)) {
+      const k = 1 - Math.exp(-dt / 0.05);
+      offset = { x: offset.x * (1 - k), y: offset.y * (1 - k) };
+      if (Math.abs(offset.x) + Math.abs(offset.y) < 0.5) offset = { x: 0, y: 0 };
+    }
+    if (inside && selected && !springs.has(selected)) springs.set(selected, { x: 0, y: 0, vx: 0, vy: 0 });
+    let moving = inside && now - lastMove <= MOVE_STEER_REST_MS + 40;
+    for (const [el, s] of springs) {
+      if (!el.isConnected) {
+        springs.delete(el);
+        continue;
+      }
+      const still = !moveSteerSpring(s, tension(el), dt);
+      if (still && el !== selected) {
+        springs.delete(el);
+        s.x = s.y = 0;
+      }
+      pose(el, s);
+      moving || (moving = !still);
+    }
+    if (moving) wake();
+    else then = 0;
+  };
+  const wake = () => {
+    if (!frame) frame = requestAnimationFrame(tick);
+  };
+  const knock = (el, dir, by = MOVE_STEER_KNOCK) => {
+    if (reduced()) return;
+    const s = springs.get(el) ?? { x: 0, y: 0, vx: 0, vy: 0 };
+    s.vx += dir.x * by;
+    s.vy += dir.y * by;
+    springs.set(el, s);
+    wake();
+  };
+  const select = (el) => {
+    if (el === selected) return;
+    selected?.removeAttribute("data-steer");
+    selected = el;
+    selected?.setAttribute("data-steer", "");
+    if (selected?.matches('[role="option"]')) selected.scrollIntoView({ block: "nearest" });
+  };
+  const regain = () => {
+    if (selected?.isConnected) return selected;
+    const all = targets();
+    if (!all.length) {
+      select(null);
+      return null;
+    }
+    let best = all[0];
+    let d = Infinity;
+    for (const el of all) {
+      const m = middle(boxOf(el));
+      const dist = Math.hypot(m.x - lastHand.x, m.y - lastHand.y);
+      if (dist < d) {
+        d = dist;
+        best = el;
+      }
+    }
+    select(best);
+    offset = { x: 0, y: 0 };
+    return best;
+  };
+  const unpose = () => {
+    for (const el of springs.keys()) pose(el, { x: 0, y: 0, vx: 0, vy: 0 });
+    springs.clear();
+  };
+  const ghost = (kind, from, to, ms, ease, done) => {
+    if (!veil || reduced() || typeof veil.animate !== "function") {
+      done();
+      return null;
+    }
+    const g = document.createElement("i");
+    g.className = `tweakers-move-steer-ghost tweakers-move-steer-${kind}`;
+    if (kind === "arrow") g.innerHTML = ARROW;
+    veil.append(g);
+    const end = to();
+    const turn = kind === "arrow" ? [1, 0.15] : [0.35, 1];
+    const a = g.animate([
+      { transform: `translate(${from.x}px, ${from.y}px) scale(${turn[0]})`, opacity: 1 },
+      { transform: `translate(${end.x}px, ${end.y}px) scale(${turn[1]})`, opacity: kind === "arrow" ? 0.2 : 1 }
+    ], { duration: ms, easing: ease, fill: "forwards" });
+    const finish = () => {
+      g.remove();
+      done();
+    };
+    a.onfinish = finish;
+    a.oncancel = () => g.remove();
+    return a;
+  };
+  let flight = null;
+  const makeVeil = () => {
+    if (veil) return;
+    veil = document.createElement("div");
+    veil.className = "tweakers-move-steer-veil";
+    veil.addEventListener("wheel", onWheel, { passive: false });
+    const panel = root();
+    if (panel) veil.style.setProperty("--move-text", getComputedStyle(panel).getPropertyValue("--move-text"));
+    document.body.append(veil);
+  };
+  const dropVeil = () => {
+    veil?.remove();
+    veil = null;
+  };
+  const enter = (e) => {
+    const all = targets();
+    if (!all.length) return;
+    flight?.cancel();
+    flight = null;
+    makeVeil();
+    inside = true;
+    const at2 = { x: e.clientX, y: e.clientY };
+    let best = all[0];
+    let d = Infinity;
+    for (const el of all) {
+      const m2 = middle(boxOf(el));
+      const dist = Math.hypot((m2.x - at2.x) / 2, m2.y - at2.y);
+      if (dist < d) {
+        d = dist;
+        best = el;
+      }
+    }
+    if (!selected || !selected.isConnected) {
+      select(best);
+      offset = { x: 0, y: 0 };
+    }
+    lastMove = 0;
+    const m = middle(boxOf(selected));
+    const len = Math.hypot(m.x - at2.x, m.y - at2.y) || 1;
+    flight = ghost("arrow", at2, () => middle(boxOf(selected)), SUCK_MS, "cubic-bezier(0.6, 0, 0.9, 0.4)", () => {
+      flight = null;
+      if (selected) knock(selected, { x: (m.x - at2.x) / len, y: (m.y - at2.y) / len }, MOVE_STEER_KNOCK * 1.4);
+    });
+    hover();
+    wake();
+  };
+  const leave = (shoot) => {
+    endHold();
+    endPress(false);
+    const from = selected ? middle(boxOf(selected)) : null;
+    const was = selected;
+    inside = false;
+    hover();
+    select(null);
+    flight?.cancel();
+    flight = null;
+    if (!shoot || !from || !real) {
+      unpose();
+      dropVeil();
+      return;
+    }
+    if (was) {
+      const len = Math.hypot(real.x - from.x, real.y - from.y) || 1;
+      knock(was, { x: (from.x - real.x) / len, y: (from.y - real.y) / len });
+    }
+    flight = ghost("dot", from, () => real ? { x: real.x, y: real.y } : from, SHOOT_MS, "cubic-bezier(0.1, 0.8, 0.25, 1)", () => {
+      flight = null;
+      if (!inside) dropVeil();
+    });
+  };
+  const send1 = (g, type, shift) => {
+    if (type === "pointerdown") g.pressed = true;
+    send(g.target, type, g, { button: type === "pointermove" ? -1 : 0, buttons: type === "pointercancel" ? 0 : 1, shiftKey: shift }, true);
+  };
+  const release = (g) => {
     if (!g?.pressed || !g.target.isConnected) return;
-    send(h, g, "pointercancel", false);
+    send1(g, "pointercancel", false);
     for (let el = g.target; el; el = el.parentElement) {
       try {
-        if (el.hasPointerCapture(h.pointerId)) el.releasePointerCapture(h.pointerId);
+        if (real && el.hasPointerCapture(real.id)) el.releasePointerCapture(real.id);
       } catch {
       }
       if (el === root()) break;
     }
   };
-  const end = () => {
+  const endHold = () => {
     const h = hold;
     if (!h) return;
     hold = null;
-    document.documentElement.removeAttribute("data-move-steer");
-    release(h, h.grip);
-    if (h.chip !== h.grip) release(h, h.chip);
+    release(h.grip);
+    if (h.chip !== h.grip) release(h.chip);
+    if (real && real.y < panelTop()) leave(true);
   };
   const knobAbove = (pad) => {
     const r = (pad.closest(".tweakers-move-pad") ?? pad).getBoundingClientRect();
@@ -10571,41 +10890,24 @@ function attachMoveSteer(root, dot) {
     });
     return best;
   };
-  const begin = () => {
-    if (hold || !last || editable(document.activeElement)) return;
-    const under = document.elementFromPoint(last.x, last.y);
-    const slot = (under && area?.contains(under) ? under.closest(MOVE_STEER_SLOT) : null) ?? (selected?.isConnected ? selected : null);
-    if (!slot) return;
-    select(slot);
-    const r = slot.getBoundingClientRect();
-    const inside = last.x >= r.left && last.x <= r.right && last.y >= r.top && last.y <= r.bottom;
-    const x = inside ? last.x : r.left + r.width / 2;
-    const y = inside ? last.y : r.top + r.height / 2;
-    const at2 = inside ? under : document.elementFromPoint(x, y);
-    const target = at2 && slot.contains(at2) ? at2 : slot;
-    hold = {
-      grip: { target, x, y, pressed: false, hands: hands(target) },
-      chip: null,
-      px: last.x,
-      py: last.y,
-      pointerId: last.id,
-      shift: false,
-      lock: { axis: null, x: 0, y: 0 }
-    };
-    document.documentElement.setAttribute("data-move-steer", "held");
+  const beginHold = () => {
+    const held = hold || press || !inside || editable(document.activeElement) ? null : regain();
+    if (!held) return;
+    const p = hand();
+    const at2 = under(p);
+    const target = at2 && held.contains(at2) ? at2 : held;
+    hold = { grip: { target, x: p.x, y: p.y, pressed: false, hands: hands(target) }, chip: null, shift: false, lock: { axis: null, x: 0, y: 0 } };
+    for (const el of springs.keys()) springs.get(el).vx = springs.get(el).vy = 0;
+    wake();
   };
-  const steer = (h, e) => {
-    let dx = e.clientX - h.px;
-    let dy = e.clientY - h.py;
-    h.px = e.clientX;
-    h.py = e.clientY;
+  const steer = (h, dx, dy, shiftKey) => {
     let g = h.grip;
     if (!g.target.isConnected) {
-      end();
+      endHold();
       return;
     }
     if (!g.pressed) {
-      send(h, g, "pointerdown", e.shiftKey && g.hands === 1);
+      send1(g, "pointerdown", shiftKey && g.hands === 1);
       if (g.target.closest("[data-peek]")) {
         h.chip = g;
         return;
@@ -10615,10 +10917,10 @@ function attachMoveSteer(root, dot) {
       if (knob) {
         const k = knob.getBoundingClientRect();
         g = h.grip = { target: knob, x: k.left + k.width / 2, y: k.top + k.height / 2, pressed: false, hands: hands(knob) };
-        send(h, g, "pointerdown", e.shiftKey && g.hands === 1);
+        send1(g, "pointerdown", shiftKey && g.hands === 1);
       } else h.chip = null;
     }
-    let shift = e.shiftKey;
+    let shift = shiftKey;
     if (g.hands === 2) {
       if (shift !== h.shift) h.lock = { axis: null, x: 0, y: 0 };
       h.shift = shift;
@@ -10628,67 +10930,184 @@ function attachMoveSteer(root, dot) {
     if (!dx && !dy) return;
     g.x += dx;
     g.y += dy;
-    send(h, g, "pointermove", shift);
+    send1(g, "pointermove", shift);
   };
-  const onMove = (e) => {
-    if (steered.has(e) || e.pointerType !== "mouse") return;
-    last = { x: e.clientX, y: e.clientY, id: e.pointerId };
-    if (hold) {
-      if (!moveSteerHeld(e)) end();
-      else {
-        e.stopPropagation();
-        showDot(e.clientX, e.clientY);
-        steer(hold, e);
-        return;
-      }
-    }
-    const panel = root();
-    const t = e.target instanceof Element ? e.target : null;
-    const now = t && panel?.contains(t) ? t.closest(MOVE_STEER_AREA) : null;
-    if (!now || !panel?.contains(now)) {
-      if (area) leave();
+  const beginPress = (e) => {
+    endHold();
+    const held = inside ? regain() : null;
+    if (!held) return;
+    const p = hand();
+    const at2 = under(p);
+    const target = at2 && held.contains(at2) ? at2 : held;
+    press = { target, x: p.x, y: p.y, pressed: true, hands: 1 };
+    pressTravel = 0;
+    const init = { button: e.button, buttons: e.buttons, shiftKey: e.shiftKey, altKey: e.altKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey };
+    send(target, "pointerdown", p, init);
+    send(target, "mousedown", p, init);
+    wake();
+  };
+  const endPress = (click, e) => {
+    const g = press;
+    if (!g) return;
+    press = null;
+    const init = { button: e?.button ?? 0, buttons: 0, shiftKey: !!e?.shiftKey, altKey: !!e?.altKey, metaKey: !!e?.metaKey, ctrlKey: !!e?.ctrlKey };
+    if (!g.target.isConnected) return;
+    if (!click) {
+      send(g.target, "pointercancel", g, init);
       return;
     }
-    if (now !== area) {
-      area?.removeAttribute("data-steering");
-      area = now;
-      area.setAttribute("data-steering", "");
+    send(g.target, "pointerup", g, init);
+    send(g.target, "mouseup", g, init);
+    if (pressTravel < CLICK_SLOP) {
+      if (editable(g.target)) g.target.focus();
+      send(g.target, "click", g, { ...init, detail: 1 });
     }
-    const slot = t.closest(MOVE_STEER_SLOT);
-    if (slot && now.contains(slot)) select(slot);
-    showDot(e.clientX, e.clientY);
+    if (selected) {
+      const m = middle(boxOf(selected));
+      offset = { x: g.x - m.x, y: g.y - m.y };
+    }
   };
-  const onKeyDown = (e) => {
-    if (e.key === moveSteerKey() && !e.repeat && area) begin();
+  const own = (e) => {
+    e.stopPropagation();
+    if (e.cancelable) e.preventDefault();
   };
-  const onKeyUp = (e) => {
-    if (e.key === moveSteerKey()) end();
+  const onMove = (e) => {
+    if (sent.has(e) || e.pointerType !== "mouse") return;
+    const before = real;
+    real = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    if (!inside) {
+      const panel = root();
+      const t = e.target instanceof Element ? e.target : null;
+      const over = !!panel && !!t && (panel.contains(t) || t === veil || !!veil?.contains(t));
+      if (over && e.buttons === 0 && e.clientY >= panelTop()) {
+        own(e);
+        enter(e);
+      }
+      return;
+    }
+    own(e);
+    if (!before) return;
+    const dx = e.clientX - before.x;
+    const dy = e.clientY - before.y;
+    if (hold) {
+      if (!moveSteerHeld(e)) endHold();
+      else {
+        steer(hold, dx, dy, e.shiftKey);
+        return;
+      }
+      if (!inside) return;
+    }
+    if (press) {
+      press.x += dx;
+      press.y += dy;
+      pressTravel += Math.hypot(dx, dy);
+      send(press.target, "pointermove", press, { button: -1, buttons: e.buttons, shiftKey: e.shiftKey });
+      return;
+    }
+    if (e.clientY < panelTop()) {
+      leave(true);
+      return;
+    }
+    navigate(dx * MOVE_STEER_GAIN, dy * MOVE_STEER_GAIN);
+  };
+  const navigate = (dx, dy) => {
+    if (!regain()) return;
+    lastMove = performance.now();
+    let all = null;
+    let boxes = [];
+    const { offset: next, passes } = moveSteerTravel(
+      { x: offset.x + dx, y: offset.y + dy },
+      () => moveSteerReach(boxOf(selected), points(selected)),
+      (dir, _step, o) => {
+        if (!all) {
+          all = targets();
+          boxes = all.map(boxOf);
+        }
+        const from = all.indexOf(selected);
+        const fromBox = from >= 0 ? boxes[from] : boxOf(selected);
+        const m = middle(fromBox);
+        const i = moveSteerNext(fromBox, from >= 0 ? boxes : [...boxes, fromBox], { x: m.x + o.x, y: m.y + o.y }, dir);
+        if (i < 0) return false;
+        const was = selected;
+        select(all[i]);
+        knock(all[i], dir);
+        if (!springs.has(was)) springs.set(was, { x: 0, y: 0, vx: 0, vy: 0 });
+        return true;
+      }
+    );
+    offset = next;
+    if (passes.length && points(selected)) {
+      const d = passes[passes.length - 1];
+      const r = moveSteerReach(boxOf(selected), true);
+      if (d.x) offset.x = -d.x * (r.x - 24);
+      else offset.y = -d.y * (r.y - 24);
+    }
+    hover();
+    wake();
   };
   const onDown = (e) => {
-    if (!steered.has(e)) end();
+    if (sent.has(e) || !inside || e.pointerType !== "mouse") return;
+    own(e);
+    if (e.button === 0) beginPress(e);
   };
-  const onAway = () => {
-    end();
-    leave();
+  const onUp = (e) => {
+    if (sent.has(e) || !inside || e.pointerType !== "mouse") return;
+    own(e);
+    endPress(true, e);
+  };
+  const onMouse = (e) => {
+    if (!sent.has(e) && inside) own(e);
+  };
+  const onWheel = (e) => {
+    if (sent.has(e) || !inside) return;
+    own(e);
+    const at2 = under(hand()) ?? selected;
+    if (at2) {
+      send(at2, "wheel", hand(), {
+        deltaX: e.deltaX,
+        deltaY: e.deltaY,
+        deltaZ: e.deltaZ,
+        deltaMode: e.deltaMode,
+        shiftKey: e.shiftKey,
+        altKey: e.altKey,
+        metaKey: e.metaKey,
+        ctrlKey: e.ctrlKey
+      });
+    }
   };
   const onOut = (e) => {
-    if (!e.relatedTarget && !hold) leave();
+    if (!e.relatedTarget) real = null;
+  };
+  const onKeyDown = (e) => {
+    if (e.key === moveSteerKey() && !e.repeat) beginHold();
+  };
+  const onKeyUp = (e) => {
+    if (e.key === moveSteerKey()) endHold();
+  };
+  const onAway = () => {
+    endHold();
+    endPress(false);
+    real = null;
   };
   const onVisibility = () => {
     if (document.hidden) onAway();
   };
   window.addEventListener("pointermove", onMove, true);
   window.addEventListener("pointerdown", onDown, true);
+  window.addEventListener("pointerup", onUp, true);
+  for (const type of ["mousedown", "mouseup", "click", "dblclick", "auxclick", "contextmenu"]) window.addEventListener(type, onMouse, true);
   window.addEventListener("keydown", onKeyDown, true);
   window.addEventListener("keyup", onKeyUp, true);
   window.addEventListener("blur", onAway);
   document.addEventListener("mouseout", onOut);
   document.addEventListener("visibilitychange", onVisibility);
   return () => {
-    end();
-    leave();
+    leave(false);
+    if (frame) cancelAnimationFrame(frame);
     window.removeEventListener("pointermove", onMove, true);
     window.removeEventListener("pointerdown", onDown, true);
+    window.removeEventListener("pointerup", onUp, true);
+    for (const type of ["mousedown", "mouseup", "click", "dblclick", "auxclick", "contextmenu"]) window.removeEventListener(type, onMouse, true);
     window.removeEventListener("keydown", onKeyDown, true);
     window.removeEventListener("keyup", onKeyUp, true);
     window.removeEventListener("blur", onAway);
@@ -11731,7 +12150,7 @@ function drawMoveGate(g, w, h, dpr, reading, threshold, colours, pad = 0) {
   const top = pad;
   const tall = h - pad * 2;
   const y = (v) => top + (1 - Math.max(0, Math.min(1, v))) * tall;
-  const mid = w / 2;
+  const mid2 = w / 2;
   const thresholdLine = () => {
     const at2 = Math.round(y(threshold)) + 0.5;
     g.globalAlpha = 1;
@@ -11752,7 +12171,7 @@ function drawMoveGate(g, w, h, dpr, reading, threshold, colours, pad = 0) {
     if (reading.ahead && reading.ahead > 0) {
       g.globalAlpha = 0.18;
       g.fillStyle = colours.lookahead;
-      g.fillRect(mid, 0, Math.min(w - mid, reading.ahead * w), h);
+      g.fillRect(mid2, 0, Math.min(w - mid2, reading.ahead * w), h);
       g.globalAlpha = 1;
     }
     const sample = (curve, px) => {
@@ -11788,7 +12207,7 @@ function drawMoveGate(g, w, h, dpr, reading, threshold, colours, pad = 0) {
   }
   g.globalAlpha = 0.7;
   g.fillStyle = colours.text;
-  g.fillRect(Math.round(mid - dpr / 2), 0, dpr, h);
+  g.fillRect(Math.round(mid2 - dpr / 2), 0, dpr, h);
   g.globalAlpha = 1;
 }
 function moveGateDemoReading(steps = 96, phase = 0) {
@@ -15153,12 +15572,12 @@ function pointAtOrBefore(points, t, cursor) {
   }
   let found = -1;
   while (lo <= hi) {
-    const mid = lo + hi >> 1;
-    if (points[mid].t <= t) {
-      found = mid;
-      lo = mid + 1;
+    const mid2 = lo + hi >> 1;
+    if (points[mid2].t <= t) {
+      found = mid2;
+      lo = mid2 + 1;
     } else {
-      hi = mid - 1;
+      hi = mid2 - 1;
     }
   }
   if (cursor) cursor.index = Math.max(0, found);
@@ -15184,12 +15603,12 @@ function valueBefore(lane, t) {
   let hi = points.length - 1;
   let i = -1;
   while (lo <= hi) {
-    const mid = lo + hi >> 1;
-    if (points[mid].t < t) {
-      i = mid;
-      lo = mid + 1;
+    const mid2 = lo + hi >> 1;
+    if (points[mid2].t < t) {
+      i = mid2;
+      lo = mid2 + 1;
     } else {
-      hi = mid - 1;
+      hi = mid2 - 1;
     }
   }
   if (i < 0) return points[0].v;
@@ -16473,22 +16892,22 @@ function reaches(curve, light) {
   let lo = 0;
   let hi = 1;
   for (let i = 0; i < 30; i++) {
-    const mid = (lo + hi) / 2;
-    if (curve(mid) < light) lo = mid;
-    else hi = mid;
+    const mid2 = (lo + hi) / 2;
+    if (curve(mid2) < light) lo = mid2;
+    else hi = mid2;
   }
   return hi;
 }
 var EXPO_EASING = linearEasing(expoInOut);
 var EXPO_QUIET_SHARE = reaches(expoInOut, MOVE_VIEW_PRESENTATION.quietLight);
-function zoomThrough(duration, reduced) {
-  if (reduced !== null) {
-    const tween2 = (from, to) => ({ from, to, duration: reduced, delay: 0, easing: "linear" });
+function zoomThrough(duration, reduced2) {
+  if (reduced2 !== null) {
+    const tween2 = (from, to) => ({ from, to, duration: reduced2, delay: 0, easing: "linear" });
     return {
       leaving: { fade: tween2(1, 0) },
       arriving: { fade: tween2(0, 1) },
-      duration: reduced,
-      quiet: Math.round(reduced * MOVE_VIEW_PRESENTATION.quietLight)
+      duration: reduced2,
+      quiet: Math.round(reduced2 * MOVE_VIEW_PRESENTATION.quietLight)
     };
   }
   const { enterScale, exitScale } = MOVE_VIEW_PRESENTATION;
@@ -16500,11 +16919,11 @@ function zoomThrough(duration, reduced) {
     quiet: Math.round(EXPO_QUIET_SHARE * duration)
   };
 }
-function moveViewChoreography(_change, reduced = false) {
-  return zoomThrough(MOVE_VIEW_PRESENTATION.duration, reduced ? MOVE_VIEW_REDUCED.duration : null);
+function moveViewChoreography(_change, reduced2 = false) {
+  return zoomThrough(MOVE_VIEW_PRESENTATION.duration, reduced2 ? MOVE_VIEW_REDUCED.duration : null);
 }
-function movePanelChoreography(reduced = false) {
-  return zoomThrough(MOVE_PANEL_PRESENTATION.duration, reduced ? MOVE_PANEL_PRESENTATION.reduced : null);
+function movePanelChoreography(reduced2 = false) {
+  return zoomThrough(MOVE_PANEL_PRESENTATION.duration, reduced2 ? MOVE_PANEL_PRESENTATION.reduced : null);
 }
 var MOVE_PANEL_ARRIVE_EASING = linearEasing((x) => {
   const e = expoInOut(x);
@@ -16961,8 +17380,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     setVolume(MoveVolumeDisplay.get());
     return MoveVolumeDisplay.subscribe(() => setVolume(MoveVolumeDisplay.get()));
   }, []);
-  const steerDotRef = (0, import_react19.useRef)(null);
-  (0, import_react19.useEffect)(() => attachMoveSteer(() => panelRef.current, () => steerDotRef.current), []);
+  (0, import_react19.useEffect)(() => attachMoveSteer(() => panelRef.current), []);
   (0, import_react19.useEffect)(() => {
     const poll = volume?.getValue;
     if (!poll) {
@@ -17904,7 +18322,6 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     ),
     /* @__PURE__ */ (0, import_jsx_runtime20.jsxs)("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-move-motion-key": `${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(" ")}`, "data-overlay": padListView || explorationOpen || composition || audioWave != null || ModOverlay || roomWave || color || presetSave ? true : void 0, children: [
       !explorationOpen && colorMeta && /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveColorDisplay, { panelId: page.panel.id, meta: colorMeta, anchor: panelRef, theme }),
-      /* @__PURE__ */ (0, import_jsx_runtime20.jsx)("i", { ref: steerDotRef, className: "tweakers-move-steer-dot", "aria-hidden": "true" }),
       /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(PresetExploration, {}),
       presetSave && /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePresetSaveInput, { suggested: presetSave.suggested }),
       /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(import_react20.AnimatePresence, { children: agent && !agent.sheet && !presetSave && /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveAgentPrompt, { view: agent }, "agent") }),
@@ -20169,7 +20586,7 @@ function useAgentDrop(inputRef) {
   } : {};
   return { dropping, props };
 }
-function MoveAgentField({ view, inputRef, value, sent, placeholder, label, onDraft, onExpand, onSend }) {
+function MoveAgentField({ view, inputRef, value, sent: sent2, placeholder, label, onDraft, onExpand, onSend }) {
   const fileRef = (0, import_react19.useRef)(null);
   const shiftAlone = (0, import_react19.useRef)(false);
   const pictures = MoveAgentStore.acceptsAttachments();
@@ -20193,7 +20610,7 @@ function MoveAgentField({ view, inputRef, value, sent, placeholder, label, onDra
           value,
           rows: 1,
           readOnly: thinking,
-          "data-sent": sent || void 0,
+          "data-sent": sent2 || void 0,
           placeholder,
           "aria-label": label,
           autoFocus: true,
@@ -21576,9 +21993,9 @@ function runUpdates(updates) {
 var animatable = (doc) => !!doc?.startViewTransition && stages > 0 && doc.visibilityState !== "hidden";
 function startChange(doc, change, updates) {
   const root = doc.documentElement;
-  const reduced = reducedMotion2();
-  const plan = moveViewChoreography(change, reduced);
-  const panelPlan = movePanelChoreography(reduced);
+  const reduced2 = reducedMotion2();
+  const plan = moveViewChoreography(change, reduced2);
+  const panelPlan = movePanelChoreography(reduced2);
   const before = panelKey(doc);
   let panelMotion = null;
   root.setAttribute(MOVE_VIEW_CHANGE_ATTR, change);

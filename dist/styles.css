@@ -438,10 +438,6 @@
   /* A big slot at rest sits a step quieter than the chip; the slot whose
      dial is in the hand comes back up to the chip, so the eye finds it. */
   --move-slot-rest: color-mix(in srgb, var(--move-chip) 60%, var(--move-bg));
-  /* The steering hand's dot: where the hidden pointer is, a soft glow in the
-     text's ink, only while it moves. */
-  --move-steer-dot: color-mix(in srgb, var(--move-text) 22%, transparent);
-  --move-steer-dot-size: 56px;
   /* A drawn screen's grid (the gate, the cleaner, the band pad): the well
      it sits in, and the cells across it. */
   --move-face-well: var(--move-bg);
@@ -757,11 +753,13 @@
   opacity: 1;
 }
 
-.tweakers-move-track:hover .tweakers-move-track-label {
+.tweakers-move-track:hover .tweakers-move-track-label,
+.tweakers-move-track[data-steer] .tweakers-move-track-label {
   opacity: 0.7;
 }
 
-.tweakers-move-track[data-active="true"]:hover .tweakers-move-track-label {
+.tweakers-move-track[data-active="true"]:hover .tweakers-move-track-label,
+.tweakers-move-track[data-active="true"][data-steer] .tweakers-move-track-label {
   opacity: 1;
 }
 
@@ -776,8 +774,10 @@
 }
 
 .tweakers-move-track[data-active="true"] .tweakers-move-track-icon { opacity: 1; }
-.tweakers-move-track:hover .tweakers-move-track-icon { opacity: 0.7; }
-.tweakers-move-track[data-active="true"]:hover .tweakers-move-track-icon { opacity: 1; }
+.tweakers-move-track:hover .tweakers-move-track-icon,
+.tweakers-move-track[data-steer] .tweakers-move-track-icon { opacity: 0.7; }
+.tweakers-move-track[data-active="true"]:hover .tweakers-move-track-icon,
+.tweakers-move-track[data-active="true"][data-steer] .tweakers-move-track-icon { opacity: 1; }
 
 /* The picture alone on the row: the name stays for a screen reader. */
 .tweakers-move-track-label[data-hidden] {
@@ -1654,40 +1654,52 @@
   --move-dial-surface: var(--move-chip);
 }
 
-/* The steering hand (move-steer): over the slots the arrow gives way — the
-   pointer only selects, and the slot it selected comes up as a touched one.
-   A pad in the hand wears its focus ring. While ⌘ holds a control the arrow
-   stays away wherever the pointer wanders. */
-.tweakers-move-grid[data-steering],
-.tweakers-move-grid[data-steering] *,
-:root[data-move-steer="held"],
-:root[data-move-steer="held"] * {
-  cursor: none !important;
+/* The steering hand (move-steer). Below the panel's top a veil over the
+   whole window holds the real pointer, so no arrow shows anywhere; the
+   control in the hand comes up as a touched one, and a button or a row in
+   the hand wears its focus ring. Its lean and stretch are set on the
+   element by the hand's springs. */
+.tweakers-move-steer-veil {
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  cursor: none;
+  touch-action: none;
+  -webkit-user-select: none;
+  user-select: none;
 }
 
-.tweakers-move-pad[data-steer] {
+.tweakers-move [data-steer]:not(.tweakers-move-dial) {
   outline: var(--move-color-stroke) solid var(--move-text);
   outline-offset: var(--move-color-stroke);
 }
 
-.tweakers-move-steer-dot {
+/* The way in and out: the arrow, sucked into the control; the dot, shot
+   back out of it to where the arrow comes back. */
+.tweakers-move-steer-ghost {
   position: absolute;
   top: 0;
   left: 0;
-  z-index: 40;
-  width: var(--move-steer-dot-size);
-  height: var(--move-steer-dot-size);
-  margin: calc(var(--move-steer-dot-size) / -2) 0 0 calc(var(--move-steer-dot-size) / -2);
-  border-radius: 50%;
-  background: radial-gradient(circle closest-side, var(--move-steer-dot), transparent);
   pointer-events: none;
-  opacity: 0;
-  transition: opacity 360ms var(--move-ease-out);
+  will-change: transform, opacity;
 }
 
-.tweakers-move-steer-dot[data-on] {
-  opacity: 1;
-  transition-duration: 90ms;
+.tweakers-move-steer-arrow svg {
+  display: block;
+  width: 14px;
+  height: 20px;
+  fill: black;
+  stroke: white;
+  stroke-width: 1.2px;
+  stroke-linejoin: round;
+}
+
+.tweakers-move-steer-dot {
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px;
+  border-radius: 50%;
+  background: var(--move-text);
 }
 
 /* Grouped slots (`moveSlotGroups`): the container carries the slot surface
@@ -1825,7 +1837,8 @@
 .tweakers-move-color-preview > span { display: block; width: 100%; height: 100%; }
 
 .tweakers-move-dial[data-kind="color"][aria-expanded="true"] .tweakers-move-color-swatch,
-.tweakers-move-dial[data-kind="color"]:hover .tweakers-move-color-swatch {
+.tweakers-move-dial[data-kind="color"]:hover .tweakers-move-color-swatch,
+.tweakers-move-dial[data-kind="color"][data-steer] .tweakers-move-color-swatch {
   box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text);
 }
 
@@ -2021,7 +2034,8 @@
   transition: transform var(--move-spring-press-duration) var(--move-spring-press), box-shadow var(--move-spring-ui-duration) var(--move-spring-ui);
 }
 .tweakers-move-pads[data-opacity] .tweakers-move-pad[data-kind="opacity"][data-on] { background: var(--move-text); }
-.tweakers-move-pads[data-opacity] .tweakers-move-pad[data-kind="opacity"]:hover { box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text); }
+.tweakers-move-pads[data-opacity] .tweakers-move-pad[data-kind="opacity"]:hover,
+.tweakers-move-pads[data-opacity] .tweakers-move-pad[data-kind="opacity"][data-steer] { box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text); }
 
 .tweakers-move-color-steps { display: grid; grid-template-columns: repeat(16, 1fr); }
 .tweakers-move-color-step {
@@ -2110,18 +2124,21 @@
 }
 
 .tweakers-move-dial:hover .tweakers-move-dial-label,
+.tweakers-move-dial[data-steer] .tweakers-move-dial-label,
 .tweakers-move-dial[data-active] .tweakers-move-dial-label {
   opacity: 0;
 }
 
 .tweakers-move-dial:hover .tweakers-move-dial-value,
+.tweakers-move-dial[data-steer] .tweakers-move-dial-value,
 .tweakers-move-dial[data-active] .tweakers-move-dial-value {
   opacity: 1;
 }
 
 /* The value comes in on the ui spring and clears out on the exit tween. The
    exploration dock shows its values without motion, so it is left out. */
-:is(.tweakers-move-dial:hover, .tweakers-move-dial[data-active]) .tweakers-move-dial-value:not(.tweakers-exploration-dock *) {
+:is(.tweakers-move-dial:hover, .tweakers-move-dial[data-active]) .tweakers-move-dial-value:not(.tweakers-exploration-dock *),
+:is(.tweakers-move-dial[data-steer], .tweakers-move-dial[data-active]) .tweakers-move-dial-value:not(.tweakers-exploration-dock *) {
   transition: opacity var(--move-spring-ui-duration) var(--move-spring-ui);
 }
 
@@ -2265,6 +2282,7 @@
 }
 
 .tweakers-move-dial:hover .tweakers-move-dial-shape path,
+.tweakers-move-dial[data-steer] .tweakers-move-dial-shape path,
 .tweakers-move-dial[data-active] .tweakers-move-dial-shape path {
   opacity: 1;
 }
@@ -2307,6 +2325,7 @@
 }
 
 .tweakers-move-dial:hover .tweakers-move-dial-aspect-frame,
+.tweakers-move-dial[data-steer] .tweakers-move-dial-aspect-frame,
 .tweakers-move-dial[data-active] .tweakers-move-dial-aspect-frame {
   border-color: var(--move-text);
 }
@@ -2657,6 +2676,7 @@
 }
 
 .tweakers-move-dial[data-kind="filter"]:hover .tweakers-move-filter-shape path,
+.tweakers-move-dial[data-kind="filter"][data-steer] .tweakers-move-filter-shape path,
 .tweakers-move-dial[data-kind="filter"][data-active] .tweakers-move-filter-shape path {
   opacity: 1;
 }
@@ -2731,6 +2751,7 @@
 }
 
 .tweakers-move-dial[data-kind="env"]:hover .tweakers-move-env-shape path,
+.tweakers-move-dial[data-kind="env"][data-steer] .tweakers-move-env-shape path,
 .tweakers-move-dial[data-kind="env"][data-active] .tweakers-move-env-shape path {
   opacity: 1;
 }
@@ -2749,6 +2770,7 @@
 }
 
 .tweakers-move-dial[data-kind="env"]:hover .tweakers-move-env-handle,
+.tweakers-move-dial[data-kind="env"][data-steer] .tweakers-move-env-handle,
 .tweakers-move-dial[data-kind="env"][data-active] .tweakers-move-env-handle,
 .tweakers-move-env-handle[data-held] {
   opacity: 1;
@@ -3835,7 +3857,8 @@
    whole run, so every row can be seen and pointed at. Only for a pointer
    that hovers — a tap on glass must not leave the list standing open. */
 @media (hover: hover) {
-  .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-screen[data-grow] {
+  .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-screen[data-grow],
+  .tweakers-move-dial:not([data-disabled])[data-steer] .tweakers-move-dial-screen[data-grow] {
     top: auto;
     height: min(var(--move-screen-full), 50vh);
     z-index: 6;
@@ -3899,7 +3922,8 @@
 }
 
 @media (hover: hover) {
-  .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-pop {
+  .tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-pop,
+  .tweakers-move-dial:not([data-disabled])[data-steer] .tweakers-move-dial-pop {
     visibility: visible;
     opacity: 1;
     pointer-events: auto;
@@ -3909,7 +3933,8 @@
 
 /* A tile was clicked: folded away until the pointer leaves the slot. */
 .tweakers-move-dial[data-active] .tweakers-move-dial-pop[data-closed],
-.tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-pop[data-closed] {
+.tweakers-move-dial:not([data-disabled]):hover .tweakers-move-dial-pop[data-closed],
+.tweakers-move-dial:not([data-disabled])[data-steer] .tweakers-move-dial-pop[data-closed] {
   visibility: hidden;
   opacity: 0;
   pointer-events: none;
@@ -5444,7 +5469,8 @@
 }
 
 .tweakers-move-pad[data-kind="color"][data-on],
-.tweakers-move-pad[data-kind="color"]:hover {
+.tweakers-move-pad[data-kind="color"]:hover,
+.tweakers-move-pad[data-kind="color"][data-steer] {
   box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text);
 }
 
@@ -7343,11 +7369,13 @@
    through its slot, which marks the row with data-hover. */
 @media (hover: hover) {
   .tweakers-list-screen-row:not(:disabled):not([data-selected]):hover,
+  .tweakers-list-screen-row:not(:disabled):not([data-selected])[data-steer],
   .tweakers-list-screen-row[data-hover]:not([data-selected]) {
     background: rgba(222, 227, 201, 0.05);
   }
 
   .tweakers-list-screen-row:not(:disabled):not([data-selected]):not([data-checked="true"]):hover .tweakers-list-screen-label,
+  .tweakers-list-screen-row:not(:disabled):not([data-selected]):not([data-checked="true"])[data-steer] .tweakers-list-screen-label,
   .tweakers-list-screen-row[data-hover]:not([data-selected]):not([data-checked="true"]) .tweakers-list-screen-label {
     opacity: 0.6;
   }
