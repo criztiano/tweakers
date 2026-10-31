@@ -16941,12 +16941,20 @@ function MoveNestLayer({ panelId, view, row: row2, returnFocus, valueFirst, onCl
     if (row2.current) watch.observe(row2.current);
     return () => watch.disconnect();
   }, [present]);
+  useEffect17(() => {
+    if (!present || !open2 || lifted) return;
+    if (typeof requestAnimationFrame === "undefined") {
+      setLifted(true);
+      return;
+    }
+    let frame = requestAnimationFrame(() => {
+      frame = requestAnimationFrame(() => setLifted(true));
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [open2, present, lifted]);
   useLayoutEffect6(() => {
     if (!present) return;
-    if (open2 && !lifted) {
-      sheet.current?.getBoundingClientRect();
-      setLifted(true);
-    } else if (!open2 && lifted) {
+    if (!open2 && lifted) {
       setLifted(false);
     } else if (!open2 && !lifted) {
       const moving = sheet.current?.getAnimations?.().length ?? 0;
