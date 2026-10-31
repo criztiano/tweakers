@@ -19042,17 +19042,21 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       }
                                       const isColor = meta.type === "color";
                                       const value = isColor ? null : chipValue(meta);
+                                      const room = !isColor && meta.moveVisual?.kind === "offset" ? moveNumericDrawing(meta, values[meta.path]) : null;
+                                      const tip = room ? `${meta.label}: ${value.num}${value.unit ?? ""}` : void 0;
                                       return /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(
                                         "button",
                                         {
                                           className: "tweakers-move-pad",
                                           "data-kind": isColor ? "color" : "value",
+                                          "data-face": room ? "offset" : void 0,
                                           "data-scrub": moveChipScrubs(meta) || void 0,
                                           "data-held": held !== null && held.meta.path === meta.path || hwHeld[meta.path] || void 0,
                                           "data-latched": chipLatched(col, meta) || void 0,
-                                          "aria-label": isColor ? meta.label : void 0,
+                                          "aria-label": isColor ? meta.label : tip,
+                                          title: tip,
                                           ...chipGesture(col, meta),
-                                          children: isColor ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadColorBody, { label: meta.label, color: String(values[meta.path]) }) : /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadValueBody, { label: meta.label, value: value.num, unit: value.unit, children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveModRing, { panelId: page.panel.id, path: meta.path, pad: true }) })
+                                          children: isColor ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadColorBody, { label: meta.label, color: String(values[meta.path]) }) : room?.kind === "offset" ? /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadOffsetBody, { origin: room.origin, position: room.position, back: room.back, forward: room.forward }) : /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MovePadValueBody, { label: meta.label, value: value.num, unit: value.unit, children: /* @__PURE__ */ (0, import_jsx_runtime20.jsx)(MoveModRing, { panelId: page.panel.id, path: meta.path, pad: true }) })
                                         },
                                         meta.path
                                       );
