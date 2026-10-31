@@ -1210,7 +1210,7 @@ function moveGrainGap(spacing, width, dial = 0) {
 function moveGrainPicture(span) {
   const { width: W, base, top, copies: most } = MOVE_GRAIN;
   const margin = 6;
-  const sample = span.shape ?? ((t) => Math.sin(Math.PI * t));
+  const sample2 = span.shape ?? ((t) => Math.sin(Math.PI * t));
   const both = span.direction === "ping-pong" || span.direction === "bounce" || span.direction === "scissors";
   const asked = W * (0.2 + 0.46 * clamp01(span.length));
   const ratio = span.trail.role === "density" ? moveGrainGap(span.trail.spacing, asked, span.positions[2]) : Math.min(GRAIN_MAX_LAG, span.trail.lag);
@@ -1227,7 +1227,7 @@ function moveGrainPicture(span) {
     const n = 48;
     for (let k = 0; k <= n; k++) {
       const t = k / n;
-      const y = clamp01(Number(sample(t)) || 0);
+      const y = clamp01(Number(sample2(t)) || 0);
       points.push(`${r2(at2 + t * g)} ${r2(base - y * (base - top))}`);
     }
     return `M${r2(at2)} ${base}L${points.join("L")}L${r2(at2 + g)} ${base}Z`;
@@ -1988,13 +1988,13 @@ function MoveSlotClockBody({ label, value, rate, frozen, tempo, hand }) {
     const g = needle.current;
     if (!g || !turns || typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") return;
     let frame = 0;
-    const tick = () => {
+    const tick2 = () => {
       const at2 = read2.current?.();
       if (typeof at2 === "number" && Number.isFinite(at2)) g.setAttribute("transform", `rotate(${((at2 % 1 + 1) % 1 * 360).toFixed(2)})`);
       else if (at2 === null) g.setAttribute("transform", "rotate(0)");
-      frame = window.requestAnimationFrame(tick);
+      frame = window.requestAnimationFrame(tick2);
     };
-    tick();
+    tick2();
     return () => window.cancelAnimationFrame(frame);
   }, [turns]);
   const { num, unit } = splitAtNumber(value);
@@ -2112,13 +2112,13 @@ function clampCurveHeight(height) {
   if (typeof height !== "number" || !Number.isFinite(height)) return CURVE_DEFAULT_HEIGHT;
   return Math.min(CURVE_MAX_HEIGHT, Math.max(CURVE_MIN_HEIGHT, height));
 }
-function plotCurve(sample, options = {}) {
+function plotCurve(sample2, options = {}) {
   const count = Math.max(2, Math.floor(options.count ?? CURVE_SAMPLE_COUNT));
   const ys = new Array(count);
   for (let i = 0; i < count; i++) {
     let y;
     try {
-      y = sample(i / (count - 1));
+      y = sample2(i / (count - 1));
     } catch {
       y = NaN;
     }
@@ -2836,17 +2836,17 @@ var enumOptionPicture = (o) => typeof o === "string" ? null : o.picture ?? null;
 var ENUM_SHAPE_SAMPLES = 64;
 function enumShapePath(meta, value) {
   if (!meta.preview) return null;
-  let sample;
+  let sample2;
   try {
-    sample = meta.preview(String(value ?? ""));
+    sample2 = meta.preview(String(value ?? ""));
   } catch {
     return null;
   }
-  if (typeof sample !== "function") return null;
-  return fittedShapePath(sample);
+  if (typeof sample2 !== "function") return null;
+  return fittedShapePath(sample2);
 }
-function fittedShapePath(sample) {
-  const segments = plotCurve(sample, { count: ENUM_SHAPE_SAMPLES }).segments;
+function fittedShapePath(sample2) {
+  const segments = plotCurve(sample2, { count: ENUM_SHAPE_SAMPLES }).segments;
   let lo = Infinity;
   let hi = -Infinity;
   for (const seg of segments) {
@@ -2882,15 +2882,15 @@ function moveActionDrawing(meta) {
 }
 function sliderShapePath(meta, value) {
   if (meta.type !== "slider" || !meta.shape) return null;
-  let sample;
+  let sample2;
   try {
-    sample = meta.shape(Number(value));
+    sample2 = meta.shape(Number(value));
   } catch {
     return null;
   }
-  if (typeof sample !== "function") return null;
+  if (typeof sample2 !== "function") return null;
   const [lo, hi] = meta.shapeDomain && meta.shapeDomain[0] < meta.shapeDomain[1] ? meta.shapeDomain : [-1, 1];
-  const held = (t) => Math.min(hi, Math.max(lo, sample(t)));
+  const held = (t) => Math.min(hi, Math.max(lo, sample2(t)));
   const segments = plotCurve(held, { count: ENUM_SHAPE_SAMPLES * 2, domain: [lo, hi] }).segments;
   const d = segments.map((seg) => seg.map((pt, i) => `${i ? "L" : "M"} ${(pt.t * 100).toFixed(2)} ${((1 - pt.v) * 100).toFixed(2)}`).join(" ")).join(" ");
   return d || null;
@@ -3940,7 +3940,7 @@ function MoveSlotDialBody({ label, value, bearing, origin, follow = false }) {
     if (n.frame) return;
     const { stiffness, damping, mass } = NEEDLE_SPRING;
     let last = performance.now();
-    const tick = (now) => {
+    const tick2 = (now) => {
       let dt = Math.min(0.05, Math.max(0, (now - last) / 1e3));
       last = now;
       while (dt > 0) {
@@ -3957,9 +3957,9 @@ function MoveSlotDialBody({ label, value, bearing, origin, follow = false }) {
         return;
       }
       draw(n.at);
-      n.frame = window.requestAnimationFrame(tick);
+      n.frame = window.requestAnimationFrame(tick2);
     };
-    n.frame = window.requestAnimationFrame(tick);
+    n.frame = window.requestAnimationFrame(tick2);
   }, [bearing, origin, follow]);
   (0, import_react3.useEffect)(() => () => {
     const n = needle.current;
@@ -4402,12 +4402,12 @@ function MoveSlotMetronomeBody({ label, checked, swing }) {
       return;
     }
     let frame = 0;
-    const tick = () => {
+    const tick2 = () => {
       const at2 = read2.current?.();
       lean(typeof at2 === "number" && Number.isFinite(at2) ? Math.max(-1, Math.min(1, at2)) * METRONOME_SWING_DEG : 0);
-      frame = window.requestAnimationFrame(tick);
+      frame = window.requestAnimationFrame(tick2);
     };
-    tick();
+    tick2();
     return () => {
       window.cancelAnimationFrame(frame);
       lean(0);
@@ -6420,13 +6420,13 @@ function bezierY(ease, x) {
   return bezierAxis2(ease[1], ease[3], s);
 }
 var SPRING_SAMPLES = 72;
-function sampleSpringTargets(sample, steps) {
+function sampleSpringTargets(sample2, steps) {
   const targets = [];
-  let target = sample(0);
+  let target = sample2(0);
   if (!Number.isFinite(target)) target = 0;
   targets.push(target);
   for (let i = 1; i <= steps; i++) {
-    const nextTarget = sample(i / steps);
+    const nextTarget = sample2(i / steps);
     if (Number.isFinite(nextTarget)) target = nextTarget;
     targets.push(target);
   }
@@ -6503,11 +6503,11 @@ function normalizeFollowerTrace(points) {
   if (range <= Number.EPSILON) return points.map(() => 0);
   return points.map((value) => (value - min) / range);
 }
-function springify(sample, options = {}) {
+function springify(sample2, options = {}) {
   const stiffness = finiteInRange(options.stiffness, SPRINGIFY_DEFAULTS.stiffness, 1, 1e3);
   const damping = finiteInRange(options.damping, SPRINGIFY_DEFAULTS.damping, 0, 100);
   const mass = finiteInRange(options.mass, SPRINGIFY_DEFAULTS.mass, 0.1, 10);
-  const targets = sampleSpringTargets(sample, SPRINGIFY_SAMPLES);
+  const targets = sampleSpringTargets(sample2, SPRINGIFY_SAMPLES);
   const atRest = { position: targets[0], velocity: 0 };
   const initial = options.loop ? periodicSpringState(targets, stiffness, damping, mass) ?? atRest : atRest;
   const raw = integrateSpringTrace(
@@ -9397,8 +9397,8 @@ function CurveComposer({
   (0, import_react9.useEffect)(() => {
     let raf = 0;
     prevTrigValue.current = Number.NaN;
-    const tick = () => {
-      raf = requestAnimationFrame(tick);
+    const tick2 = () => {
+      raf = requestAnimationFrame(tick2);
       const { composition: c, samplers: s, getPhase: gp, phase: p, mode: md, triggerSteps: ts } = liveRef.current;
       const u = gp ? gp() : p;
       const read2 = readComposition(c, u, s);
@@ -9425,7 +9425,7 @@ function CurveComposer({
         prevTrigValue.current = Number.NaN;
       }
     };
-    raf = requestAnimationFrame(tick);
+    raf = requestAnimationFrame(tick2);
     return () => cancelAnimationFrame(raf);
   }, [W, totalH]);
   const hitLayout = () => ({ totalH, driverY: driverRect ? driverRect.y : null, gap });
@@ -10553,6 +10553,34 @@ function moveSteerSpring(s, to, dt) {
   return Math.abs(to.x - s.x) + Math.abs(to.y - s.y) > 2e-3 || Math.abs(s.vx) + Math.abs(s.vy) > 0.02;
 }
 var MOVE_STEER_KNOCK = 14;
+function moveSteerEase(curve) {
+  const m = /cubic-bezier\(\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*,\s*([-\d.]+)\s*\)/.exec(curve);
+  if (!m) return (t) => t;
+  const [x1, y1, x2, y2] = m.slice(1).map(Number);
+  const at2 = (a, b, s) => 3 * a * s * (1 - s) ** 2 + 3 * b * s * s * (1 - s) + s ** 3;
+  const slope = (a, b, s) => 3 * a * (1 - s) ** 2 + 6 * (b - a) * s * (1 - s) + 3 * (1 - b) * s * s;
+  return (t) => {
+    if (t <= 0) return 0;
+    if (t >= 1) return 1;
+    let s = t;
+    for (let i = 0; i < 8; i++) {
+      const d = slope(x1, x2, s);
+      if (Math.abs(d) < 1e-6) break;
+      s = Math.min(1, Math.max(0, s - (at2(x1, x2, s) - t) / d));
+    }
+    return at2(y1, y2, s);
+  };
+}
+function moveSteerArc(from, to, heading, t) {
+  const dist = Math.hypot(to.x - from.x, to.y - from.y);
+  const len = Math.hypot(heading.x, heading.y);
+  const bend = len > 0.5 ? { x: from.x + heading.x / len * dist * 0.55, y: from.y + heading.y / len * dist * 0.55 } : { x: (from.x + to.x) / 2, y: (from.y + to.y) / 2 };
+  const u = 1 - t;
+  return {
+    x: u * u * from.x + 2 * u * t * bend.x + t * t * to.x,
+    y: u * u * from.y + 2 * u * t * bend.y + t * t * to.y
+  };
+}
 
 // src/move-steer.ts
 var import_TweakStore11 = require("tweakers/store");
@@ -10604,6 +10632,52 @@ var MoveTrackLabels = {
   }
 };
 
+// src/move-steer-sound.ts
+var MOVE_STEER_LOCK_SOUND = null;
+var MOVE_STEER_LOCK_GAIN = 0.12;
+var audio = null;
+var sample = null;
+var context = () => {
+  if (audio) return audio;
+  const Context = typeof window !== "undefined" ? window.AudioContext ?? window.webkitAudioContext : void 0;
+  audio = Context ? new Context() : null;
+  return audio;
+};
+var load = (ctx, src) => {
+  sample ?? (sample = fetch(src).then((r) => r.arrayBuffer()).then((b) => ctx.decodeAudioData(b)).catch(() => null));
+  return sample;
+};
+var tick = (ctx, at2) => {
+  const osc = ctx.createOscillator();
+  const level = ctx.createGain();
+  osc.type = "triangle";
+  osc.frequency.setValueAtTime(1600, at2);
+  osc.frequency.exponentialRampToValueAtTime(900, at2 + 0.04);
+  level.gain.setValueAtTime(1e-4, at2);
+  level.gain.exponentialRampToValueAtTime(MOVE_STEER_LOCK_GAIN, at2 + 3e-3);
+  level.gain.exponentialRampToValueAtTime(1e-4, at2 + 0.07);
+  osc.connect(level).connect(ctx.destination);
+  osc.start(at2);
+  osc.stop(at2 + 0.08);
+};
+function playMoveSteerLock() {
+  const ctx = context();
+  if (!ctx) return;
+  if (ctx.state === "suspended") void ctx.resume().catch(() => {
+  });
+  if (!MOVE_STEER_LOCK_SOUND) {
+    tick(ctx, ctx.currentTime);
+    return;
+  }
+  void load(ctx, MOVE_STEER_LOCK_SOUND).then((buffer) => {
+    if (!buffer) return;
+    const src = ctx.createBufferSource();
+    src.buffer = buffer;
+    src.connect(ctx.destination);
+    src.start();
+  });
+}
+
 // src/move-steer.ts
 var MOVE_STEER_TARGET = [
   '.tweakers-move-dial:not([data-empty]):not([data-kind="blank"])',
@@ -10615,10 +10689,8 @@ var MOVE_STEER_TARGET = [
 var POINTS_INTO = ".tweakers-list-screen-row, .tweakers-move-dial-tile, .tweakers-move-dial-arrows-plate";
 var MOVE_STEER_AXIS_SLOP = 4;
 var CLICK_SLOP = 3;
-var SUCK_MS = 240;
-var SHOOT_SPEED = 1500;
-var SHOOT_PULL = 320;
-var SHOOT_DAMP = 2 * 0.7 * Math.sqrt(SHOOT_PULL);
+var SUCK_MS = 260;
+var SHOOT_MS = 300;
 var sent = /* @__PURE__ */ new WeakSet();
 var steered = /* @__PURE__ */ new WeakSet();
 var isMoveSteer = (e) => steered.has("nativeEvent" in e ? e.nativeEvent : e);
@@ -10745,7 +10817,7 @@ function attachMoveSteer(root) {
     style.translate = `${p.tx.toFixed(2)}px ${p.ty.toFixed(2)}px`;
     style.scale = `${p.sx.toFixed(4)} ${p.sy.toFixed(4)}`;
   };
-  const tick = (now) => {
+  const tick2 = (now) => {
     frame = 0;
     const dt = then ? (now - then) / 1e3 : 1 / 60;
     then = now;
@@ -10773,7 +10845,7 @@ function attachMoveSteer(root) {
     else then = 0;
   };
   const wake = () => {
-    if (!frame) frame = requestAnimationFrame(tick);
+    if (!frame) frame = requestAnimationFrame(tick2);
   };
   const knock = (el, dir, by = MOVE_STEER_KNOCK) => {
     if (reduced()) return;
@@ -10815,8 +10887,8 @@ function attachMoveSteer(root) {
     for (const el of springs.keys()) pose(el, { x: 0, y: 0, vx: 0, vy: 0 });
     springs.clear();
   };
-  const ghost = (kind, from, to, ms, ease, done) => {
-    if (!veil || reduced() || typeof veil.animate !== "function") {
+  const ghost = (kind, from, to, ms, token, done) => {
+    if (!veil || reduced()) {
       done();
       return null;
     }
@@ -10824,19 +10896,30 @@ function attachMoveSteer(root) {
     g.className = `tweakers-move-steer-ghost tweakers-move-steer-${kind}`;
     if (kind === "arrow") g.innerHTML = ARROW;
     veil.append(g);
-    const end = to();
-    const turn = kind === "arrow" ? [1, 0.15] : [0.35, 1];
-    const a = g.animate([
-      { transform: `translate(${from.x}px, ${from.y}px) scale(${turn[0]})`, opacity: 1 },
-      { transform: `translate(${end.x}px, ${end.y}px) scale(${turn[1]})`, opacity: kind === "arrow" ? 0.2 : 1 }
-    ], { duration: ms, easing: ease, fill: "forwards" });
-    const finish = () => {
+    const panel = root();
+    const ease = moveSteerEase(panel ? getComputedStyle(panel).getPropertyValue(token) : "");
+    const way = { ...heading };
+    const scale = kind === "arrow" ? [1, 0.15] : [0.35, 1];
+    const start = performance.now();
+    let raf = 0;
+    const step = (now) => {
+      const t = Math.min(1, (now - start) / ms);
+      const e = ease(t);
+      const p = moveSteerArc(from, to(), way, e);
+      g.style.transform = `translate(${p.x}px, ${p.y}px) scale(${scale[0] + (scale[1] - scale[0]) * e})`;
+      if (kind === "arrow") g.style.opacity = String(1 - 0.8 * e);
+      if (t < 1) {
+        raf = requestAnimationFrame(step);
+        return;
+      }
       g.remove();
       done();
     };
-    a.onfinish = finish;
-    a.oncancel = () => g.remove();
-    return a;
+    raf = requestAnimationFrame(step);
+    return { cancel: () => {
+      cancelAnimationFrame(raf);
+      g.remove();
+    } };
   };
   let flight = null;
   const makeVeil = () => {
@@ -10879,7 +10962,7 @@ function attachMoveSteer(root) {
     lastMove = 0;
     const m = middle(boxOf(selected));
     const len = Math.hypot(m.x - at2.x, m.y - at2.y) || 1;
-    flight = ghost("arrow", at2, () => middle(boxOf(selected)), SUCK_MS, "cubic-bezier(0.6, 0, 0.9, 0.4)", () => {
+    flight = ghost("arrow", at2, () => selected?.isConnected ? middle(boxOf(selected)) : m, SUCK_MS, "--move-ease-in", () => {
       flight = null;
       if (selected) knock(selected, { x: (m.x - at2.x) / len, y: (m.y - at2.y) / len }, MOVE_STEER_KNOCK * 1.4);
     });
@@ -10904,46 +10987,10 @@ function attachMoveSteer(root) {
     const len = Math.hypot(heading.x, heading.y);
     const dir = len > 0.5 ? { x: heading.x / len, y: heading.y / len } : { x: 0, y: -1 };
     if (was) knock(was, { x: -dir.x, y: -dir.y });
-    launch(from, dir);
-  };
-  let shot = 0;
-  const launch = (from, dir) => {
-    const g = document.createElement("i");
-    g.className = "tweakers-move-steer-ghost tweakers-move-steer-dot";
-    veil.append(g);
-    const s = { x: from.x, y: from.y, vx: dir.x * SHOOT_SPEED, vy: dir.y * SHOOT_SPEED };
-    const start = performance.now();
-    let last = start;
-    const land = () => {
-      cancelAnimationFrame(shot);
-      shot = 0;
-      g.remove();
+    flight = ghost("dot", from, () => real ? { x: real.x, y: real.y } : from, SHOOT_MS, "--move-ease-out", () => {
+      flight = null;
       if (!inside) dropVeil();
-    };
-    flight = { cancel: () => {
-      cancelAnimationFrame(shot);
-      shot = 0;
-      g.remove();
-    } };
-    const fly = (now) => {
-      const dt = Math.min((now - last) / 1e3, 1 / 30);
-      last = now;
-      const to = real ?? from;
-      s.vx += (SHOOT_PULL * (to.x - s.x) - SHOOT_DAMP * s.vx) * dt;
-      s.vy += (SHOOT_PULL * (to.y - s.y) - SHOOT_DAMP * s.vy) * dt;
-      s.x += s.vx * dt;
-      s.y += s.vy * dt;
-      const grow = Math.min(1, (now - start) / 120);
-      g.style.transform = `translate(${s.x}px, ${s.y}px) scale(${0.35 + 0.65 * grow})`;
-      const near = Math.hypot(to.x - s.x, to.y - s.y) < 4 && Math.hypot(s.vx, s.vy) < 220;
-      if (near || now - start > 700) {
-        flight = null;
-        land();
-        return;
-      }
-      shot = requestAnimationFrame(fly);
-    };
-    shot = requestAnimationFrame(fly);
+    });
   };
   const send1 = (g, type, shift) => {
     if (type === "pointerdown") g.pressed = true;
@@ -10989,6 +11036,7 @@ function attachMoveSteer(root) {
     const at2 = under(p);
     const target = at2 && held.contains(at2) ? at2 : held;
     hold = { grip: { target, x: p.x, y: p.y, pressed: false, hands: hands(target) }, chip: null, shift: false, lock: { axis: null, x: 0, y: 0 } };
+    playMoveSteerLock();
     for (const el of springs.keys()) springs.get(el).vx = springs.get(el).vy = 0;
     wake();
   };
@@ -11067,6 +11115,7 @@ function attachMoveSteer(root) {
     if (sent.has(e) || e.pointerType !== "mouse") return;
     const before = real;
     real = { x: e.clientX, y: e.clientY, id: e.pointerId };
+    if (before) heading = { x: heading.x * 0.6 + (e.clientX - before.x) * 0.4, y: heading.y * 0.6 + (e.clientY - before.y) * 0.4 };
     if (!inside) {
       const panel = root();
       const t = e.target instanceof Element ? e.target : null;
@@ -11081,7 +11130,6 @@ function attachMoveSteer(root) {
     if (!before) return;
     const dx = e.clientX - before.x;
     const dy = e.clientY - before.y;
-    heading = { x: heading.x * 0.6 + dx * 0.4, y: heading.y * 0.6 + dy * 0.4 };
     if (hold) {
       if (!moveSteerHeld(e)) endHold();
       else {
@@ -11642,7 +11690,7 @@ function fitParams(declared, given = {}, resolve) {
   }
   return out;
 }
-async function runAgentActions(calls, actions, resolve, context = { attachments: [] }) {
+async function runAgentActions(calls, actions, resolve, context2 = { attachments: [] }) {
   const undos = [];
   let ran = 0, skipped = 0, undoable = true;
   for (const call of calls) {
@@ -11653,7 +11701,7 @@ async function runAgentActions(calls, actions, resolve, context = { attachments:
       continue;
     }
     try {
-      const undo = await action.run(params, context);
+      const undo = await action.run(params, context2);
       ran++;
       if (typeof undo === "function") undos.push(undo);
       else undoable = false;
@@ -11934,7 +11982,7 @@ ${e.id}`);
         }
       };
       const resolve = (ref) => resolveBoundary(ref, known, editMap?.());
-      const context = { attachments: attachments.map((a) => a.file) };
+      const context2 = { attachments: attachments.map((a) => a.file) };
       const stream = {
         say: (said) => {
           if (this.flight !== flight || flight.signal.aborted || !this.view) return;
@@ -11978,7 +12026,7 @@ ${e.id}`);
         act: (call) => early = early.then(async () => {
           if (this.flight !== flight || flight.signal.aborted || earlyError) return;
           if (!earlyRan && this.options.checkpoint) await this.options.checkpoint();
-          const ran2 = await runAgentActions([call], actions, resolve, context);
+          const ran2 = await runAgentActions([call], actions, resolve, context2);
           earlyRan += ran2.ran;
           earlySkipped += ran2.skipped;
           earlyError = ran2.error;
@@ -12026,7 +12074,7 @@ ${e.id}`);
         outcome.cancelled = true;
         return;
       }
-      const ran = await runAgentActions(calls, actions, resolve, context);
+      const ran = await runAgentActions(calls, actions, resolve, context2);
       const acted = { ran: earlyRan + ran.ran, skipped: earlySkipped + ran.skipped, error: earlyError ?? ran.error };
       const { before, changed } = applyAgentWrites(reply.writes ?? [], this.options.panels);
       if (changed || acted.ran) {
@@ -12269,16 +12317,16 @@ function drawMoveGate(g, w, h, dpr, reading, threshold, colours, pad = 0) {
       g.fillRect(mid2, 0, Math.min(w - mid2, reading.ahead * w), h);
       g.globalAlpha = 1;
     }
-    const sample = (curve, px) => {
+    const sample2 = (curve, px) => {
       const at2 = px / w * (n - 1);
       const i = Math.min(n - 2, Math.floor(at2));
       return curve[i] + (curve[i + 1] - curve[i]) * (at2 - i);
     };
     g.fillStyle = colours.text;
     for (let px = 0; px < w; px++) {
-      const through = open2 ? Math.max(0, Math.min(1, sample(open2, px))) : 1;
+      const through = open2 ? Math.max(0, Math.min(1, sample2(open2, px))) : 1;
       g.globalAlpha = 0.05 + 0.15 * through;
-      const at2 = y(sample(levels, px));
+      const at2 = y(sample2(levels, px));
       g.fillRect(px, at2, 1, top + tall - at2);
     }
     thresholdLine();
@@ -12350,9 +12398,9 @@ function MoveLiveCanvas({ className, paint, still = false, deps = [] }) {
       draw();
       return;
     }
-    let frame = requestAnimationFrame(function tick() {
+    let frame = requestAnimationFrame(function tick2() {
       draw();
-      frame = requestAnimationFrame(tick);
+      frame = requestAnimationFrame(tick2);
     });
     return () => cancelAnimationFrame(frame);
   }, [still, ...deps]);
@@ -15532,10 +15580,10 @@ function MoveTimelineClock() {
   const canRecord = MoveTimelineStore.canRecord();
   const clockRef = (0, import_react16.useRef)(null);
   (0, import_react16.useEffect)(() => {
-    let raf = requestAnimationFrame(function tick() {
+    let raf = requestAnimationFrame(function tick2() {
       const text = MoveTimelineStore.clock();
       if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
-      raf = requestAnimationFrame(tick);
+      raf = requestAnimationFrame(tick2);
     });
     return () => cancelAnimationFrame(raf);
   }, []);
@@ -17439,9 +17487,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       setLiveValue(null);
       return;
     }
-    let raf = requestAnimationFrame(function tick() {
+    let raf = requestAnimationFrame(function tick2() {
       setLiveValue(poll());
-      raf = requestAnimationFrame(tick);
+      raf = requestAnimationFrame(tick2);
     });
     return () => cancelAnimationFrame(raf);
   }, [volume]);
@@ -19994,8 +20042,8 @@ function MoveRoomWave({ theme }) {
   roomClock.duration = buffer.duration || 1;
   (0, import_react19.useEffect)(() => {
     let last = null;
-    let raf = requestAnimationFrame(function tick(now) {
-      raf = requestAnimationFrame(tick);
+    let raf = requestAnimationFrame(function tick2(now) {
+      raf = requestAnimationFrame(tick2);
       if (!roomClock.playing) {
         last = null;
         return;
@@ -20094,10 +20142,10 @@ function MoveWaveClock() {
   const records = transport?.recording !== void 0;
   const clockRef = (0, import_react19.useRef)(null);
   (0, import_react19.useEffect)(() => {
-    let raf = requestAnimationFrame(function tick() {
+    let raf = requestAnimationFrame(function tick2() {
       const text = MoveWaveformStore.clock();
       if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
-      raf = requestAnimationFrame(tick);
+      raf = requestAnimationFrame(tick2);
     });
     return () => cancelAnimationFrame(raf);
   }, []);
@@ -20168,11 +20216,11 @@ function MoveWaveTransport({ playing: playing2, loopOn, getSeconds, onLoaded }) 
   const secondsRef = (0, import_react19.useRef)(getSeconds);
   secondsRef.current = getSeconds;
   (0, import_react19.useEffect)(() => {
-    let raf = requestAnimationFrame(function tick() {
+    let raf = requestAnimationFrame(function tick2() {
       const t = secondsRef.current();
       const text = `${Math.floor(t / 60)}:${String(Math.floor(t % 60)).padStart(2, "0")}:${String(Math.floor(t % 1 * 100)).padStart(2, "0")}`;
       if (clockRef.current && clockRef.current.textContent !== text) clockRef.current.textContent = text;
-      raf = requestAnimationFrame(tick);
+      raf = requestAnimationFrame(tick2);
     });
     return () => cancelAnimationFrame(raf);
   }, []);
@@ -20891,11 +20939,11 @@ function MoveScope({ index }) {
   (0, import_react19.useEffect)(() => {
     const now = import_ModulationStore3.ModulationStore.getLevel(index);
     const pts = Array(SCOPE_SAMPLES).fill(now);
-    let raf = requestAnimationFrame(function tick() {
+    let raf = requestAnimationFrame(function tick2() {
       pts.push(import_ModulationStore3.ModulationStore.getLevel(index));
       pts.shift();
       ref.current?.setAttribute("d", moveShapePath(pts));
-      raf = requestAnimationFrame(tick);
+      raf = requestAnimationFrame(tick2);
     });
     return () => cancelAnimationFrame(raf);
   }, [index]);
@@ -20917,7 +20965,7 @@ function MoveWavePreview({ index }) {
   const preview = import_ModulationStore3.ModulationStore.getSettingsPreview(64);
   (0, import_react19.useEffect)(() => {
     let shown = "";
-    let raf = requestAnimationFrame(function tick() {
+    let raf = requestAnimationFrame(function tick2() {
       const { start, span } = getAudioModWindow();
       const key = `${start.toFixed(5)}|${span.toFixed(5)}`;
       if (key !== shown) {
@@ -20929,7 +20977,7 @@ function MoveWavePreview({ index }) {
       const x = (Math.min(1, Math.max(0, at2)) * 100).toFixed(2);
       line.current?.setAttribute("x1", x);
       line.current?.setAttribute("x2", x);
-      raf = requestAnimationFrame(tick);
+      raf = requestAnimationFrame(tick2);
     });
     return () => cancelAnimationFrame(raf);
   }, [index]);
@@ -21355,7 +21403,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
     const options = moveMultiselectOptions(meta);
     const checked = moveMultiselectChecked(meta, value);
     const cursor = import_TweakStore21.TweakStore.getListCursor(panelId, meta.path);
-    const tick = (index) => {
+    const tick2 = (index) => {
       const option = options[index];
       if (!option || off(meta)) return;
       import_TweakStore21.TweakStore.setListCursor(panelId, meta.path, index);
@@ -21385,7 +21433,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
         onPointerUp: (e) => {
           if (!end(meta) || off(meta)) return;
           if (e.shiftKey) return reset(meta);
-          tick(listRow.current >= 0 ? listRow.current : cursor);
+          tick2(listRow.current >= 0 ? listRow.current : cursor);
         },
         onPointerCancel: () => {
           end(meta);
@@ -21402,7 +21450,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
           if (!next) return;
           e.preventDefault();
           e.stopPropagation();
-          if (next === "toggle") tick(cursor);
+          if (next === "toggle") tick2(cursor);
           else import_TweakStore21.TweakStore.setListCursor(panelId, meta.path, next.cursor);
         },
         children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(MoveSlotMultiselectBody, { label: meta.label, options, checked, cursor })
@@ -22394,15 +22442,15 @@ function useDockBottom(active) {
       const next = notifyDockBottom(tops, window.innerHeight);
       setBottom((prev) => prev === next ? prev : next);
     };
-    const tick = (now) => {
+    const tick2 = (now) => {
       if (now - last >= MEASURE_MS) {
         last = now;
         measure();
       }
-      frame = window.requestAnimationFrame(tick);
+      frame = window.requestAnimationFrame(tick2);
     };
     measure();
-    frame = window.requestAnimationFrame(tick);
+    frame = window.requestAnimationFrame(tick2);
     return () => window.cancelAnimationFrame(frame);
   }, [active]);
   return bottom;

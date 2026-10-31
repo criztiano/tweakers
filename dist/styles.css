@@ -438,6 +438,12 @@
   /* A big slot at rest sits a step quieter than the chip; the slot whose
      dial is in the hand comes back up to the chip, so the eye finds it. */
   --move-slot-rest: color-mix(in srgb, var(--move-chip) 60%, var(--move-bg));
+  /* The control in the steering hand: a pad or a button comes up a step
+     brighter, the way a big slot comes up from rest to the chip, and every
+     one of them glows from the inside. */
+  --move-steer-lift: color-mix(in srgb, var(--move-text) 9%, transparent);
+  --move-steer-glow: color-mix(in srgb, var(--move-text) 26%, transparent);
+  --move-steer-glow-size: 16px;
   /* A drawn screen's grid (the gate, the cleaner, the band pad): the well
      it sits in, and the cells across it. */
   --move-face-well: var(--move-bg);
@@ -1669,11 +1675,28 @@
   user-select: none;
 }
 
-/* A slot whose list covers it carries the ring too: its surface is hidden. */
-.tweakers-move [data-steer]:not(.tweakers-move-dial),
-.tweakers-move-dial[data-steer]:has(.tweakers-move-dial-screen) {
-  outline: var(--move-color-stroke) solid var(--move-text);
-  outline-offset: var(--move-color-stroke);
+/* In the hand, everything reads the same: a big slot comes up to the chip,
+   a pad or a button a step brighter than it rests, and each glows from the
+   inside. A slot whose list covers it glows through the list. */
+.tweakers-move-dial[data-steer],
+.tweakers-move-dial[data-steer] .tweakers-move-dial-screen,
+.tweakers-move-dial[data-steer] .tweakers-move-color-swatch {
+  box-shadow: inset 0 0 var(--move-steer-glow-size) var(--move-steer-glow);
+}
+
+.tweakers-move [data-steer]:not(.tweakers-move-dial) {
+  box-shadow:
+    inset 0 0 var(--move-steer-glow-size) var(--move-steer-glow),
+    inset 0 0 0 100vmax var(--move-steer-lift);
+}
+
+/* A key keeps its stacked edge in the hand. */
+.tweakers-move .tweakers-move-pad[data-kind="page"][data-steer],
+.tweakers-move .tweakers-move-pad[data-kind="action"][data-steer] {
+  box-shadow:
+    inset 0 0 var(--move-steer-glow-size) var(--move-steer-glow),
+    inset 0 0 0 100vmax var(--move-steer-lift),
+    -2px 2px 0 0 var(--move-bg), -3px 3px 0 0 var(--move-text);
 }
 
 /* The way in and out: the arrow, sucked into the control; the dot, shot
@@ -1839,8 +1862,7 @@
 .tweakers-move-color-preview > span { display: block; width: 100%; height: 100%; }
 
 .tweakers-move-dial[data-kind="color"][aria-expanded="true"] .tweakers-move-color-swatch,
-.tweakers-move-dial[data-kind="color"]:hover .tweakers-move-color-swatch,
-.tweakers-move-dial[data-kind="color"][data-steer] .tweakers-move-color-swatch {
+.tweakers-move-dial[data-kind="color"]:hover .tweakers-move-color-swatch {
   box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text);
 }
 
@@ -2036,8 +2058,7 @@
   transition: transform var(--move-spring-press-duration) var(--move-spring-press), box-shadow var(--move-spring-ui-duration) var(--move-spring-ui);
 }
 .tweakers-move-pads[data-opacity] .tweakers-move-pad[data-kind="opacity"][data-on] { background: var(--move-text); }
-.tweakers-move-pads[data-opacity] .tweakers-move-pad[data-kind="opacity"]:hover,
-.tweakers-move-pads[data-opacity] .tweakers-move-pad[data-kind="opacity"][data-steer] { box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text); }
+.tweakers-move-pads[data-opacity] .tweakers-move-pad[data-kind="opacity"]:hover { box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text); }
 
 .tweakers-move-color-steps { display: grid; grid-template-columns: repeat(16, 1fr); }
 .tweakers-move-color-step {
@@ -5486,8 +5507,7 @@
 }
 
 .tweakers-move-pad[data-kind="color"][data-on],
-.tweakers-move-pad[data-kind="color"]:hover,
-.tweakers-move-pad[data-kind="color"][data-steer] {
+.tweakers-move-pad[data-kind="color"]:hover {
   box-shadow: inset 0 0 0 var(--move-color-stroke) var(--move-text);
 }
 
