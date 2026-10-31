@@ -30,6 +30,8 @@ import {
   MOVE_STEER_GAIN, MOVE_STEER_KNOCK, MOVE_STEER_REST_MS, moveSteerNext, moveSteerPose, moveSteerReach,
   moveSteerSpring, moveSteerTravel, type MoveSteerBox, type MoveSteerSpring, type MoveSteerVec,
 } from './move-steer-core';
+import { TweakStore } from './store/TweakStore';
+import { MOVE_PANEL_SETTINGS } from './move-track-labels';
 
 /** What the hand can hold: a slot, a pad, a header button, a row of the wheel's list. */
 export const MOVE_STEER_TARGET = [
@@ -45,9 +47,12 @@ const POINTS_INTO = '.tweakers-list-screen-row, .tweakers-move-dial-tile, .tweak
 export const MOVE_STEER_AXIS_SLOP = 4;
 /** A press that travels less than this is a click. */
 const CLICK_SLOP = 3;
-/** The arrow's flight in, and the dot's flight out, in ms. */
+/** The arrow's flight in, in ms. */
 const SUCK_MS = 240;
-const SHOOT_MS = 210;
+/** The dot's flight out: the speed it leaves at, along the hand's last travel, in px/s; the pull that bends it onto the arrow. */
+const SHOOT_SPEED = 1500;
+const SHOOT_PULL = 320;
+const SHOOT_DAMP = 2 * 0.7 * Math.sqrt(SHOOT_PULL);
 
 /** Every event the hand sends; the ⌘ gestures are also in `steered`. */
 const sent = new WeakSet<Event>();
@@ -128,6 +133,7 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
   let hold: Hold | null = null;
   let press: Grip | null = null;
   let pressTravel = 0;
+  let heading: MoveSteerVec = { x: 0, y: -1 };
   let hovered: Element | null = null;
   const springs = new Map<Element, MoveSteerSpring>();
   let frame = 0;
@@ -329,17 +335,21 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     makeVeil();
     inside = true;
     const at = { x: e.clientX, y: e.clientY };
-    let best = all[0]!;
+    // The hand lands on the big slot nearest across, on the top row of
+    // slots — the page's own controls, not the header above them.
+    const slots = all.filter((el) => el.matches('.tweakers-move-dial'));
+    const pool = slots.length ? slots : all;
+    const top = Math.min(...pool.map((el) => boxOf(el).top));
+    let best = pool[0]!;
     let d = Infinity;
-    for (const el of all) {
-      const m = middle(boxOf(el));
-      const dist = Math.hypot((m.x - at.x) / 2, m.y - at.y);
+    for (const el of pool) {
+      const b = boxOf(el);
+      if (b.top > top + 24) continue;
+      const dist = Math.abs(middle(b).x - at.x);
       if (dist < d) { d = dist; best = el; }
     }
-    if (!selected || !selected.isConnected) {
-      select(best);
-      offset = { x: 0, y: 0 };
-    }
+    select(best);
+    offset = { x: 0, y: 0 };
     lastMove = 0;
     const m = middle(boxOf(selected!));
     const len = Math.hypot(m.x - at.x, m.y - at.y) || 1;
@@ -362,16 +372,45 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     select(null);
     flight?.cancel();
     flight = null;
-    if (!shoot || !from || !real) { unpose(); dropVeil(); return; }
-    // The control kicks back as the dot leaves it for the arrow.
-    if (was) {
-      const len = Math.hypot(real.x - from.x, real.y - from.y) || 1;
-      knock(was, { x: (from.x - real.x) / len, y: (from.y - real.y) / len });
-    }
-    flight = ghost('dot', from, () => (real ? { x: real.x, y: real.y } : from), SHOOT_MS, 'cubic-bezier(0.1, 0.8, 0.25, 1)', () => {
-      flight = null;
-      if (!inside) dropVeil();
-    });
+    if (!shoot || !from || !real || reduced() || !veil) { unpose(); dropVeil(); return; }
+    // The dot leaves the control the way the hand was going, and the
+    // control kicks back the other way.
+    const len = Math.hypot(heading.x, heading.y);
+    const dir = len > 0.5 ? { x: heading.x / len, y: heading.y / len } : { x: 0, y: -1 };
+    if (was) knock(was, { x: -dir.x, y: -dir.y });
+    launch(from, dir);
+  };
+
+  /**
+   * The dot's flight out: launched along `dir`, pulled onto the arrow
+   * wherever the real pointer now is, and gone — with the veil — once it
+   * lands there.
+   */
+  let shot = 0;
+  const launch = (from: MoveSteerVec, dir: MoveSteerVec) => {
+    const g = document.createElement('i');
+    g.className = 'tweakers-move-steer-ghost tweakers-move-steer-dot';
+    veil!.append(g);
+    const s = { x: from.x, y: from.y, vx: dir.x * SHOOT_SPEED, vy: dir.y * SHOOT_SPEED };
+    const start = performance.now();
+    let last = start;
+    const land = () => { cancelAnimationFrame(shot); shot = 0; g.remove(); if (!inside) dropVeil(); };
+    flight = { cancel: () => { cancelAnimationFrame(shot); shot = 0; g.remove(); } } as Animation;
+    const fly = (now: number) => {
+      const dt = Math.min((now - last) / 1000, 1 / 30);
+      last = now;
+      const to = real ?? from;
+      s.vx += (SHOOT_PULL * (to.x - s.x) - SHOOT_DAMP * s.vx) * dt;
+      s.vy += (SHOOT_PULL * (to.y - s.y) - SHOOT_DAMP * s.vy) * dt;
+      s.x += s.vx * dt;
+      s.y += s.vy * dt;
+      const grow = Math.min(1, (now - start) / 120);
+      g.style.transform = `translate(${s.x}px, ${s.y}px) scale(${0.35 + 0.65 * grow})`;
+      const near = Math.hypot(to.x - s.x, to.y - s.y) < 4 && Math.hypot(s.vx, s.vy) < 220;
+      if (near || now - start > 700) { flight = null; land(); return; }
+      shot = requestAnimationFrame(fly);
+    };
+    shot = requestAnimationFrame(fly);
   };
 
   /* ── ⌘: the hand takes the control ── */
@@ -514,6 +553,8 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
     if (!before) return;
     const dx = e.clientX - before.x;
     const dy = e.clientY - before.y;
+    // The way the hand is going, smoothed: the dot leaves the panel that way.
+    heading = { x: heading.x * 0.6 + dx * 0.4, y: heading.y * 0.6 + dy * 0.4 };
     if (hold) {
       if (!moveSteerHeld(e)) endHold();
       else { steer(hold, dx, dy, e.shiftKey); return; }
@@ -528,7 +569,9 @@ export function attachMoveSteer(root: () => HTMLElement | null): () => void {
       return;
     }
     if (e.clientY < panelTop()) { leave(true); return; }
-    navigate(dx * MOVE_STEER_GAIN, dy * MOVE_STEER_GAIN);
+    const pace = TweakStore.getValues(MOVE_PANEL_SETTINGS);
+    const gain = (v: unknown) => (typeof v === 'number' && v > 0 ? v : MOVE_STEER_GAIN);
+    navigate(dx * gain(pace?.handSpeedX), dy * gain(pace?.handSpeedY));
   };
 
   const navigate = (dx: number, dy: number) => {

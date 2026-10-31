@@ -1,3 +1,4 @@
+import { MOVE_STEER_GAIN } from './move-steer-core';
 import { LUCIDE_ICONS } from './icons';
 import { TweakStore, type PanelConfig, type TweakValue } from './store/TweakStore';
 
@@ -11,7 +12,7 @@ import { TweakStore, type PanelConfig, type TweakValue } from './store/TweakStor
  * choose, so the choice stands greyed out and the row shows names.
  */
 
-/** The kit's own settings page that holds the track row's look. */
+/** The kit's own settings page: the track row's look, and the steering hand's pace across and up and down. */
 export const MOVE_PANEL_SETTINGS = 'move-panel';
 
 export type MoveTrackLabelStyle = 'name' | 'both' | 'icon';
@@ -53,9 +54,13 @@ export const MoveTrackLabels = {
           default: 'both',
           options: MOVE_TRACK_LABEL_STYLES.map((s) => ({ value: s, label: STYLE_LABELS[s] })),
         },
+        // The steering hand's pace (move-steer): pointer pixels to hand
+        // pixels inside the panel, across and up and down apart.
+        handSpeedX: { type: 'slider', default: MOVE_STEER_GAIN, min: 0.5, max: 5, step: 0.1, display: 'value' },
+        handSpeedY: { type: 'slider', default: MOVE_STEER_GAIN, min: 0.5, max: 5, step: 0.1, display: 'value' },
       },
       undefined,
-      { kind: 'kit', persist: true, labels: { trackLabels: 'Track labels' } }
+      { kind: 'kit', persist: true, labels: { trackLabels: 'Track labels', handSpeedX: 'Hand speed ←→', handSpeedY: 'Hand speed ↑↓' } }
     );
   },
 
