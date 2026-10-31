@@ -566,6 +566,8 @@
      from just under its size and a little below its place. */
   --move-nest-duration: 220ms;
   --move-nest-exit-duration: 160ms;
+  --move-nest-ease: var(--move-ease-out);
+  --move-nest-exit-ease: var(--move-ease-exit);
   --move-nest-scale: 0.98;
   --move-nest-rise: 6px;
   /* What stays behind recedes: faded down, blurred out. */
@@ -1803,8 +1805,8 @@
   opacity: 0;
   transform: translateY(var(--move-nest-rise)) scale(var(--move-nest-scale));
   transition:
-    opacity var(--move-nest-exit-duration) var(--move-ease-exit),
-    transform var(--move-nest-exit-duration) var(--move-ease-exit);
+    opacity var(--move-nest-exit-duration) var(--move-nest-exit-ease),
+    transform var(--move-nest-exit-duration) var(--move-nest-exit-ease);
   /* Its own layer for as long as it stands, so its rise and fade run on the
      compositor and never repaint its slots. */
   will-change: transform, opacity;
@@ -1815,7 +1817,7 @@
   transform: none;
   pointer-events: auto;
   transition-duration: var(--move-nest-duration);
-  transition-timing-function: var(--move-ease-out);
+  transition-timing-function: var(--move-nest-ease);
 }
 
 .tweakers-move-nest-row {
@@ -1841,8 +1843,8 @@
 .tweakers-move-inner > .tweakers-move-tracks,
 .tweakers-move-inner > .tweakers-move-controls {
   transition:
-    opacity var(--move-nest-exit-duration) var(--move-ease-exit),
-    filter var(--move-nest-exit-duration) var(--move-ease-exit);
+    opacity var(--move-nest-exit-duration) var(--move-nest-exit-ease),
+    filter var(--move-nest-exit-duration) var(--move-nest-exit-ease);
 }
 
 /* While a sheet stands — on its way in, up, and on its way out — what is
@@ -1859,7 +1861,7 @@
   opacity: var(--move-nest-behind-opacity);
   filter: blur(var(--move-nest-behind-blur));
   transition-duration: var(--move-nest-duration);
-  transition-timing-function: var(--move-ease-out);
+  transition-timing-function: var(--move-nest-ease);
 }
 
 /* Less motion: a plain cross-fade — no blur, no rise, no scale. */
