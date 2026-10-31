@@ -137,8 +137,11 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   the arrow in never carries it on down the panel. The way out is up past
   the top row of controls, or the pointer flung far over their top: the
   arrow comes back just over the top, above the control the hand let go of, and moves only as the
-  mouse moves — a little quicker for a moment (`MOVE_STEER_BUMP`), closing
-  on the real pointer within `MOVE_STEER_CLOSE` px of travel. A still mouse
+  mouse moves — a touch quicker for a moment (`MOVE_STEER_BUMP`), closing
+  on the real pointer within `MOVE_STEER_CLOSE` px of travel — drawn as near
+  to the system's own arrow as a page can, so the hand-over reads as one
+  arrow. (A page-drawn arrow everywhere would trail the real mouse by a
+  frame; the system keeps the arrow the rest of the time.) A still mouse
   is a still arrow — no flight of its own — and the page's own arrow stays
   hidden until the two meet. There is no way out to
   the sides or the bottom: a veil over the window holds the real pointer
