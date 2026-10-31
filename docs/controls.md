@@ -129,10 +129,11 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
 
 - **Below the panel's top there is no arrow.** Coming down into the panel the
   arrow is sucked into the big slot nearest across, on the top row of
-  slots; going back up over the top edge, a dot is shot out of the control
-  in the hand and lands on the arrow where it comes back. Both fly on an
-  arc: they leave the way the pointer was going and bend round onto their
-  end, eased by the kit's `--move-ease-in` (in) and `--move-ease-out` (out). There is no way out to the sides or the bottom: a veil over
+  slots, and the travel that brought it in moves nothing until it has
+  landed; going back up over the top edge, a dot is shot out of the control
+  in the hand and lands on the arrow where it comes back. Both go straight
+  for their end on a slight arc, leaning the way the pointer was going
+  (`MOVE_STEER_ARC_BEND`), eased by the kit's `--move-ease-in` (in) and `--move-ease-out` (out). There is no way out to the sides or the bottom: a veil over
   the window holds the real pointer while the hand is in.
 - **The pointer is a hand on a control, not a place.** Its travel runs
   quicker than the page's, across and up and down apart — the kit's own
@@ -147,9 +148,14 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   (`--move-steer-glow`) — no ring. At the panel's edge it stretches and stays. A rest lets the
   tension go: the hand settles back in the middle (move-steer-core). The
   header's buttons and the wheel list's rows are controls like any other.
-- **Every press lands on the hand.** A click, a drag, the mouse wheel and the
-  hover a list opens on all reach the control in the hand, where the hand
-  is; a drag runs at the page's pace from there.
+- **Every press lands on the hand.** A click, a drag and the hover a list
+  opens on all reach the control in the hand, where the hand is; a drag
+  runs at the page's pace from there. The hand never scrolls a list on its
+  own.
+- **Two fingers turn.** On a trackpad (or a mouse wheel) the control in the
+  hand turns the way the fingers go, exactly as ⌘ and the mouse turn it,
+  with the same tick, and lets go when they stop. On a row of the wheel's
+  list they scroll the list under the hand instead.
 - **⌘ takes the control** (Ctrl off a Mac), with a short tick
   (`move-steer-sound`; a drawn placeholder until the real sound is in —
   the file's place is described there). While ⌘ is held the hand stays
@@ -170,6 +176,15 @@ hold (`move-steer`, attached by `MovePanel`; an app wires nothing).
   it there — a number, an option or a colour alike.
 - **Pictures turn, never jump.** Under ⌘ the xy point, the filter's hand and
   the needle turn from their value; nothing goes to where the pointer is.
+
+### Page keys and the track chip
+
+The number keys 1 to 4 are the track buttons: each takes its page, as the
+Move's track buttons do, never while a field has the keys. Each page's
+number sits faint beside its name (`aria-keyshortcuts` says it too). The
+page on show wears its colour as a full chip — its marker line opens out
+into the chip on the kit's UI spring — and the names of the other pages
+stay readable beside it.
 
 ### A slot on its own: `MoveSlot`
 
