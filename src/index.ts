@@ -494,6 +494,7 @@ export { projectEntries, timelineToSource, formatEntries, formatAgentTime, resol
 export type { MoveAgentEntry, MoveAgentSegment, MoveAgentProjectedEntry, MoveAgentSourceRange, MoveAgentBoundaryRef, MoveAgentBoundary, MoveAgentArg, MoveAgentSignal, MoveAgentSignalState, MoveAgentSignalInfo, MoveAgentTool, MoveAgentToolResult, MoveAgentToolCall, MoveAgentPass, MoveAgentPassResult, MoveAgentLive } from './move-agent-perception';
 export { MoveSearchStore, moveSearchMatch, moveSearchFilter } from './move-search';
 export type { MoveSearchTarget, MoveSearchView } from './move-search';
+export { moveWheelRows, MOVE_WHEEL_ROW_SLACK } from './move-wheel';
 export type { MovePresetItem, MovePresetView, MovePresetSave, MovePresetPhase } from './move-presets';
 
 export { PresetExplorationStore } from './preset-exploration';
