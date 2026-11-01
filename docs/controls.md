@@ -81,12 +81,18 @@ these gestures; an app wires nothing.
   (Shift creeps at 0.1×). The drag never latches the chip. A still click
   keeps the Move's gesture: a tap latches and a hold peeks. A colour chip
   and a filter's resonance chip keep the Move's gesture only.
-- **Hover selects, it never opens.** A pointer resting on a list slot — a
-  select's list, a multiselect, folders, a curve's grid — puts it in the hand
-  (the steering hand, below) without opening it; it opens to its whole run
-  only while ⌘ or two fingers turn it, as a knob's list opens only under a
-  finger on the Move. A finger on glass has no hover: a tap opens and picks
-  as before. Every kit list row (`ListScreen`) wears the same hover.
+- **With the hand on, hover selects; with it off, hover opens.** While the
+  Panel hand is on (the steering hand, below), a pointer resting on a list
+  slot — a select's list, a multiselect, folders, a curve's grid — puts it
+  in the hand without opening it; it opens to its whole run only while ⌘ or
+  two fingers turn it, as a knob's list opens only under a finger on the
+  Move. With the Panel hand off, the pointer is a plain pointer: resting on
+  a long list opens it to its whole run, the row under it lights, and a
+  click takes that row. A slot outside the panel (a Library card) is never
+  in the hand, so it opens the same way. The panel says which it is with
+  `data-hand` (`steer` or `free`). A finger on glass has no hover: a tap
+  opens and picks as before. Every kit list row (`ListScreen`) wears the
+  same hover.
 - **A colour takes both hands.** Across turns the hue (the knob), up and down
   the luminosity (the volume knob) — up is lighter. A still click opens the
   editor.

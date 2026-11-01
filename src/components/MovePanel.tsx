@@ -1918,7 +1918,7 @@ export function MovePanel({ theme = 'system', productionEnabled = isDevDefault, 
       <MoveHandToggle theme={theme} />
       {/* While a composer floats above it the whole instrument comes forward,
           over the app's own panels — you are working in it. */}
-      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-settings={settingsOpen || undefined} data-move-motion-key={`${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(' ')}`} data-overlay={padListView || explorationOpen || composition || audioWave != null || ModOverlay || roomWave || color || presetSave ? true : undefined}>
+      <div ref={panelRef} className="tweakers-move" data-dock={dock} data-hand={panelSettings?.steerHand === false ? 'free' : 'steer'} data-settings={settingsOpen || undefined} data-move-motion-key={`${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(' ')}`} data-overlay={padListView || explorationOpen || composition || audioWave != null || ModOverlay || roomWave || color || presetSave ? true : undefined}>
         {!explorationOpen && colorMeta && <MoveColorDisplay panelId={page.panel.id} meta={colorMeta} anchor={panelRef} theme={theme} />}
         <PresetExploration />
         {presetSave && <MovePresetSaveInput suggested={presetSave.suggested} />}
