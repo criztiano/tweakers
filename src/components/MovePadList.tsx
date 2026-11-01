@@ -1,5 +1,7 @@
 import { useEffect, useRef } from 'react';
 import { MovePadListStore, type MovePadListView } from '../move-pad-list';
+import { TweakStore } from '../store/TweakStore';
+import { MOVE_PANEL_SETTINGS } from '../move-track-labels';
 import type { MoveActionDrawing } from '../move-layout';
 import { MovePadActionBody, MovePadFaceBody, MovePadIconLabelBody, MovePadListBody } from './move-slots';
 
@@ -12,6 +14,12 @@ export function MovePadList({ panelId, path, label, icon, face, view, disabled }
 }) {
   const root = useRef<HTMLDivElement>(null);
   const open = view?.panelId === panelId && view.path === path;
+  // With the Panel hand off the mouse is a plain pointer: resting on the pad
+  // opens its list, a row takes the click, and leaving closes what hover
+  // opened. A list a press opened stays until it is done, as on the Move.
+  const hovered = useRef(false);
+  if (!open) hovered.current = false;
+  const free = () => TweakStore.getValues(MOVE_PANEL_SETTINGS)?.steerHand === false;
   // A picker's closed pad names its choice rather than its action.
   const shown = open ? view.submitLabel ?? label : MovePadListStore.choice(panelId, path)?.label ?? label;
   // A face stays on while the list is open, unless the open pad names a submit.
@@ -45,11 +53,24 @@ export function MovePadList({ panelId, path, label, icon, face, view, disabled }
       window.removeEventListener('move-tweakers:jog-click', jogClick, true);
     };
   }, [open]);
-  return <div className="tweakers-move-pad-list-anchor" ref={root}>
+  return <div className="tweakers-move-pad-list-anchor" ref={root} data-hover-open={(open && hovered.current) || undefined}
+    onPointerEnter={(e) => {
+      if (e.pointerType !== 'mouse' || open || disabled || !free()) return;
+      hovered.current = true;
+      MovePadListStore.open(panelId, path);
+    }}
+    onPointerLeave={() => {
+      if (open && hovered.current && !view.pending) MovePadListStore.close();
+    }}>
     <button type="button" className="tweakers-move-pad" data-kind="list" data-confirm={open || undefined} data-pending={open && view.pending || undefined}
       aria-expanded={open} aria-haspopup="listbox" aria-busy={open && view.pending || undefined} disabled={disabled || (open && view.pending)}
       data-face={drawn?.kind} aria-label={drawn ? shown : undefined} title={drawn ? shown : undefined}
-      onClick={() => { void MovePadListStore.activate(panelId, path); }}>
+      onClick={() => {
+        // A picker hover opened is picked from its rows: its pad takes no row.
+        if (open && hovered.current && view.single) return;
+        hovered.current = false;
+        void MovePadListStore.activate(panelId, path);
+      }}>
       {drawn
         ? <MovePadFaceBody drawing={drawn} />
         : icon
