@@ -19104,7 +19104,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       }
     ),
     /* @__PURE__ */ jsx23(MoveHandToggle, { theme }),
-    /* @__PURE__ */ jsxs16("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-move-motion-key": `${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(" ")}`, "data-overlay": padListView || explorationOpen || composition || audioWave != null || ModOverlay || roomWave || color || presetSave ? true : void 0, children: [
+    /* @__PURE__ */ jsxs16("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-hand": panelSettings?.steerHand === false ? "free" : "steer", "data-settings": settingsOpen || void 0, "data-move-motion-key": `${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(" ")}`, "data-overlay": padListView || explorationOpen || composition || audioWave != null || ModOverlay || roomWave || color || presetSave ? true : void 0, children: [
       !explorationOpen && colorMeta && /* @__PURE__ */ jsx23(MoveColorDisplay, { panelId: page.panel.id, meta: colorMeta, anchor: panelRef, theme }),
       /* @__PURE__ */ jsx23(PresetExploration, {}),
       presetSave && /* @__PURE__ */ jsx23(MovePresetSaveInput, { suggested: presetSave.suggested }),

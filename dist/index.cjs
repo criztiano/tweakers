@@ -19638,7 +19638,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       }
     ),
     /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveHandToggle, { theme }),
-    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-settings": settingsOpen || void 0, "data-move-motion-key": `${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(" ")}`, "data-overlay": padListView || explorationOpen || composition || audioWave != null || ModOverlay || roomWave || color || presetSave ? true : void 0, children: [
+    /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)("div", { ref: panelRef, className: "tweakers-move", "data-dock": dock, "data-hand": panelSettings?.steerHand === false ? "free" : "steer", "data-settings": settingsOpen || void 0, "data-move-motion-key": `${motionSurface}:${motionPage}|${pages.map((pg) => pg.panel.id).join(" ")}`, "data-overlay": padListView || explorationOpen || composition || audioWave != null || ModOverlay || roomWave || color || presetSave ? true : void 0, children: [
       !explorationOpen && colorMeta && /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveColorDisplay, { panelId: page.panel.id, meta: colorMeta, anchor: panelRef, theme }),
       /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(PresetExploration, {}),
       presetSave && /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MovePresetSaveInput, { suggested: presetSave.suggested }),
