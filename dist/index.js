@@ -12269,6 +12269,17 @@ function MoveModRing({ panelId, path, pad }) {
 
 // src/move-color.ts
 import { TweakStore as TweakStore14 } from "tweakers/store";
+
+// src/move-wheel.ts
+var MOVE_WHEEL_ROW_SLACK = 3;
+function moveWheelRows(delta) {
+  const counts = Math.abs(Math.round(delta)) || (delta ? 1 : 0);
+  if (!counts) return 0;
+  const rows = counts <= MOVE_WHEEL_ROW_SLACK ? 1 : counts - (MOVE_WHEEL_ROW_SLACK - 1);
+  return Math.sign(delta) * rows;
+}
+
+// src/move-color.ts
 var MOVE_GRADIENT_STOPS = 4;
 var MOVE_COLOR_PALETTES = [
   { id: "move", name: "Move 16", colors: [
@@ -12680,7 +12691,7 @@ var MoveColorStoreClass = class {
   /** Walk the navigator's cursor by wheel detents. */
   movePickerCursor(delta) {
     if (!this.isPickerOpen() || !delta) return;
-    const step = Math.round(delta) || Math.sign(delta);
+    const step = moveWheelRows(delta);
     const next = Math.max(0, Math.min(this.palettes().length, this.pickerCursor + step));
     if (next === this.pickerCursor) return;
     this.pickerCursor = next;
@@ -14322,7 +14333,7 @@ var MovePresetStoreClass = class {
     if (!view || view.phase === "closing" || view.chosen) return;
     const items = this.items(view.panelId);
     if (!items.length) return;
-    const step = Math.round(delta) || Math.sign(delta);
+    const step = moveWheelRows(delta);
     const index = items.findIndex((i) => i.id === view.cursor);
     const next = Math.max(0, Math.min(items.length - 1, (index < 0 ? 0 : index) + step));
     if (items[next].id === view.cursor && !view.comparing) return;
@@ -18503,7 +18514,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       const view = MoveSearchStore.getView();
       if (!view) return;
       e.preventDefault();
-      searchStep(view, Math.round(Number(e.detail?.delta) || 0));
+      searchStep(view, moveWheelRows(Number(e.detail?.delta) || 0));
     };
     const onJogClick = (e) => {
       const view = MoveSearchStore.getView();
@@ -23953,6 +23964,7 @@ export {
   MOVE_WAVE_MAX_DISPLAY,
   MOVE_WAVE_MAX_HEIGHT,
   MOVE_WAVE_MAX_WIDTH,
+  MOVE_WHEEL_ROW_SLACK,
   ModDot,
   ModRing,
   ModulationStore6 as ModulationStore,
@@ -24217,6 +24229,7 @@ export {
   defaultView as moveWaveformDefaultView,
   moveWaveformDemoSample,
   styleFromValues as moveWaveformStyleFromValues,
+  moveWheelRows,
   moveWheelSlot,
   nearestHandle,
   nearestPoint,
