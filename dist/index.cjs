@@ -229,11 +229,11 @@ __export(index_exports, {
   PresetExplorationStore: () => PresetExplorationStore,
   SH_DEF: () => SH_DEF,
   SelectTool: () => SelectTool,
-  TAB_PATH: () => import_TweakStore24.TAB_PATH,
+  TAB_PATH: () => import_TweakStore25.TAB_PATH,
   TRANSFER_MAX_POINTS: () => TRANSFER_MAX_POINTS,
   TRANSFER_MIN_GAP: () => TRANSFER_MIN_GAP,
   TimelineStore: () => TimelineStore,
-  TweakStore: () => import_TweakStore24.TweakStore,
+  TweakStore: () => import_TweakStore25.TweakStore,
   WAVEFORM_BASE_BUCKET: () => WAVEFORM_BASE_BUCKET,
   WAVEFORM_MAX_ZOOM: () => WAVEFORM_MAX_ZOOM,
   WAVEFORM_MODES: () => WAVEFORM_MODES,
@@ -280,7 +280,7 @@ __export(index_exports, {
   cycleSegmentType: () => cycleSegmentType,
   defaultComposition: () => defaultComposition,
   defaultFilterResponse: () => defaultFilterResponse,
-  defaultListItemParams: () => import_TweakStore24.defaultListItemParams,
+  defaultListItemParams: () => import_TweakStore25.defaultListItemParams,
   denormalizeEnumDial: () => denormalizeEnumDial,
   denormalizeFilterDial: () => denormalizeFilterDial,
   denormalizeRangeDial: () => denormalizeRangeDial,
@@ -328,9 +328,9 @@ __export(index_exports, {
   gradientFillBox: () => gradientFillBox,
   gradientToCss: () => gradientToCss,
   gradientToTransform: () => gradientToTransform,
-  groupListFields: () => import_TweakStore24.groupListFields,
+  groupListFields: () => import_TweakStore25.groupListFields,
   handleLeftStyles: () => handleLeftStyles,
-  hintDomId: () => import_TweakStore24.hintDomId,
+  hintDomId: () => import_TweakStore25.hintDomId,
   hslToRgb: () => hslToRgb,
   hsvToRgb: () => hsvToRgb,
   insertPoint: () => insertPoint,
@@ -422,7 +422,7 @@ __export(index_exports, {
   normalizeFilterValue: () => normalizeFilterValue,
   normalizeGradient: () => normalizeGradient,
   normalizeHex: () => normalizeHex,
-  normalizeListItems: () => import_TweakStore24.normalizeListItems,
+  normalizeListItems: () => import_TweakStore25.normalizeListItems,
   normalizeRangeDial: () => normalizeRangeDial,
   normalizeToggleDial: () => normalizeToggleDial,
   normalizeTransfer: () => normalizeTransfer,
@@ -440,7 +440,7 @@ __export(index_exports, {
   padSpan: () => padSpan,
   pageStripOffset: () => pageStripOffset,
   parseHex: () => parseHex,
-  parseListItemSchema: () => import_TweakStore24.parseListItemSchema,
+  parseListItemSchema: () => import_TweakStore25.parseListItemSchema,
   percentToValue: () => percentToValue,
   pickDragTarget: () => pickDragTarget,
   plotCurve: () => plotCurve,
@@ -960,6 +960,507 @@ var MovePadListStore = new MovePadListStoreClass();
 
 // src/components/MovePadList.tsx
 var import_react4 = require("react");
+var import_TweakStore5 = require("tweakers/store");
+
+// src/move-steer-core.ts
+var MOVE_STEER_GAIN_X = 2;
+var MOVE_STEER_GAIN_Y = 1.5;
+var MOVE_STEER_MARGIN = 10;
+var MOVE_STEER_SLOW_MARGIN = 50;
+var MOVE_STEER_FULL_SPEED = 0.6;
+function moveSteerMargin(speed) {
+  const t = Math.min(1, Math.max(0, speed / MOVE_STEER_FULL_SPEED));
+  return MOVE_STEER_MARGIN + MOVE_STEER_SLOW_MARGIN * (1 - t * t * (3 - 2 * t));
+}
+var MOVE_STEER_EXIT_SLACK = 48;
+var MOVE_STEER_EXIT_SPEED = 0.5;
+function moveSteerLeaves(depth, v) {
+  if (depth <= 0) return false;
+  const speed = Math.hypot(v.x, v.y);
+  const up = Math.max(0, -v.y);
+  const straight = speed ? up / speed : 0;
+  const quick = Math.min(1, up / MOVE_STEER_EXIT_SPEED);
+  const intent = straight * straight * (0.5 + 0.5 * quick);
+  return depth >= MOVE_STEER_EXIT_SLACK * (1 - intent);
+}
+var MOVE_STEER_REACH_MIN = 34;
+var MOVE_STEER_REACH_MAX = 70;
+var MOVE_STEER_REST_MS = 110;
+var mid = (b) => ({ x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 });
+function moveSteerReach(b) {
+  const clamp14 = (v) => Math.min(MOVE_STEER_REACH_MAX, Math.max(MOVE_STEER_REACH_MIN, v));
+  return { x: clamp14((b.right - b.left) / 2 + MOVE_STEER_MARGIN), y: clamp14((b.bottom - b.top) / 2 + MOVE_STEER_MARGIN) };
+}
+function moveSteerMap(hand, from, gain, at2) {
+  return { x: hand.x + (at2.x - from.x) * gain.x, y: hand.y + (at2.y - from.y) * gain.y };
+}
+function moveSteerSettle(from, boxes, at2, margin) {
+  let here = from;
+  let landed = null;
+  for (let step = 0; step < 8; step++) {
+    const mx = Math.min(margin, (here.right - here.left) / 2 + MOVE_STEER_MARGIN);
+    const my = Math.min(margin, (here.bottom - here.top) / 2 + MOVE_STEER_MARGIN);
+    if (at2.x >= here.left - mx && at2.x <= here.right + mx && at2.y >= here.top - my && at2.y <= here.bottom + my) break;
+    const ox = at2.x < here.left ? at2.x - here.left : at2.x > here.right ? at2.x - here.right : 0;
+    const oy = at2.y < here.top ? at2.y - here.top : at2.y > here.bottom ? at2.y - here.bottom : 0;
+    const dir = Math.abs(ox) / mx >= Math.abs(oy) / my ? { x: Math.sign(ox), y: 0 } : { x: 0, y: Math.sign(oy) };
+    const next = moveSteerNext(here, boxes, at2, dir);
+    if (next < 0 || boxes[next] === from) break;
+    landed = { index: next, dir };
+    here = boxes[next];
+  }
+  return landed;
+}
+function moveSteerNext(from, boxes, at2, dir) {
+  const c = mid(from);
+  let best = -1;
+  let score = Infinity;
+  boxes.forEach((b, i) => {
+    if (b === from) return;
+    const m = mid(b);
+    let gap, across;
+    const along = dir.x ? (m.x - c.x) * dir.x : (m.y - c.y) * dir.y;
+    const aside = dir.x ? Math.abs(m.y - c.y) : Math.abs(m.x - c.x);
+    if (along <= 1 || along < aside * (dir.x ? MOVE_STEER_CONE_ACROSS : MOVE_STEER_CONE_DOWN)) return;
+    if (dir.x) {
+      gap = dir.x > 0 ? Math.max(0, b.left - from.right) : Math.max(0, from.left - b.right);
+      across = at2.y < b.top ? b.top - at2.y : at2.y > b.bottom ? at2.y - b.bottom : 0;
+    } else {
+      gap = dir.y > 0 ? Math.max(0, b.top - from.bottom) : Math.max(0, from.top - b.bottom);
+      across = at2.x < b.left ? b.left - at2.x : at2.x > b.right ? at2.x - b.right : 0;
+    }
+    const s = gap + across * 2;
+    if (s < score) {
+      score = s;
+      best = i;
+    }
+  });
+  return best;
+}
+function moveSteerPose(u, size) {
+  const ax = Math.tanh(u.x * 1.1);
+  const ay = Math.tanh(u.y * 1.1);
+  const sx = 1 + 0.045 * Math.abs(ax) - 0.02 * Math.abs(ay);
+  const sy = 1 + 0.045 * Math.abs(ay) - 0.02 * Math.abs(ax);
+  return {
+    tx: ax * 3 + Math.sign(ax) * (size.x * (sx - 1)) / 2,
+    ty: ay * 3 + Math.sign(ay) * (size.y * (sy - 1)) / 2,
+    sx,
+    sy
+  };
+}
+var STIFFNESS = 520;
+var DAMPING = 2 * 0.62 * Math.sqrt(STIFFNESS);
+function moveSteerSpring(s, to, dt) {
+  const step = Math.min(dt, 1 / 30);
+  s.vx += (STIFFNESS * (to.x - s.x) - DAMPING * s.vx) * step;
+  s.vy += (STIFFNESS * (to.y - s.y) - DAMPING * s.vy) * step;
+  s.x += s.vx * step;
+  s.y += s.vy * step;
+  return Math.abs(to.x - s.x) + Math.abs(to.y - s.y) > 2e-3 || Math.abs(s.vx) + Math.abs(s.vy) > 0.02;
+}
+var MOVE_STEER_CONE_ACROSS = 0.5;
+var MOVE_STEER_CONE_DOWN = 0.25;
+var MOVE_STEER_KNOCK = 14;
+
+// src/icons.ts
+var ICON_CHEVRON_RIGHT = "M9.5 6L15.5 12L9.5 18";
+var ICON_CHEVRON_LEFT = "M14.5 6L8.5 12L14.5 18";
+var ICON_ELLIPSIS = [
+  { cx: "5.5", cy: "12" },
+  { cx: "12", cy: "12" },
+  { cx: "18.5", cy: "12" }
+];
+var ICON_CHECK = "M5 12.75L10 19L19 5";
+var ICON_SEARCH = "M10.5 4.5C7.18629 4.5 4.5 7.18629 4.5 10.5C4.5 13.8137 7.18629 16.5 10.5 16.5C13.8137 16.5 16.5 13.8137 16.5 10.5C16.5 7.18629 13.8137 4.5 10.5 4.5ZM15 15L20 20";
+var ICON_PLAY = "M9.24394 2.36758C7.41419 1.18362 5 2.49701 5 4.67639V19.3238C5 21.5032 7.41419 22.8166 9.24394 21.6326L20.5624 14.3089C22.2371 13.2253 22.2372 10.775 20.5624 9.69129L9.24394 2.36758Z";
+var ICON_LOOP = [
+  "M17 2L21 6L17 10",
+  "M3 11V9C3 7.34315 4.34315 6 6 6H21",
+  "M7 22L3 18L7 14",
+  "M21 13V15C21 16.6569 19.6569 18 18 18H3"
+];
+var ICON_CLOSE = "M6 6L18 18M6 18L18 6";
+var ICON_MOVE_CAPTURE = {
+  viewBox: "0 0 14 14",
+  path: "M1 0H5V2H2V5H0V0H1ZM2 10V12H5V14H0V9H2V10ZM10 0H14V5H12V2H9V0H10ZM14 10V14H9V12H12V9H14V10Z"
+};
+var ICON_MOVE_ENTER = {
+  viewBox: "0 0 12 12",
+  circle: { cx: "6", cy: "6", r: "6" }
+};
+var ICON_MOVE_LOOP = {
+  viewBox: "0 0 14 14",
+  paths: ["M10 1L12.5 3.5L10 6", "M1.5 7.5V6C1.5 4.61929 2.61929 3.5 4 3.5H12", "M4 13L1.5 10.5L4 8", "M12.5 6.5V8C12.5 9.38071 11.3807 10.5 10 10.5H2"]
+};
+var ICON_MOVE_COPY = {
+  viewBox: "0 0 14 14",
+  paths: [
+    "M5.5 5.5H12.5V12.5H5.5V5.5Z",
+    "M3.5 8.5H2.5C1.94772 8.5 1.5 8.05228 1.5 7.5V2.5C1.5 1.94772 1.94772 1.5 2.5 1.5H7.5C8.05228 1.5 8.5 1.94772 8.5 2.5V3.5"
+  ]
+};
+var MOVE_GLYPH_TEXT_FONT = "Helvetica, 'Helvetica Neue', Arial, system-ui, sans-serif";
+var MOVE_GLYPH_DOT = {
+  viewBox: ICON_MOVE_ENTER.viewBox,
+  size: 12,
+  circles: [ICON_MOVE_ENTER.circle]
+};
+var MOVE_GLYPH_STEP = {
+  viewBox: "0 0 14 14",
+  size: 14,
+  paths: ["M3 1.5H11V9.5H3V1.5Z", "M4.5 12.5H9.5"]
+};
+var MOVE_FUNCTION_ICONS = {
+  play: { viewBox: "0 0 14 14", size: 14, paths: ["M4 2.5L11.5 7L4 11.5V2.5Z"] },
+  rec: {
+    viewBox: "0 0 14 14",
+    size: 14,
+    paths: ["M7 2.5A4.5 4.5 0 1 0 7 11.5A4.5 4.5 0 1 0 7 2.5Z"],
+    circles: [{ cx: "7", cy: "7", r: "2" }]
+  },
+  /* Mute is a letter, not a drawing: the "M", set in Helvetica on the same
+     14px grid as the drawn marks. */
+  mute: { viewBox: "0 0 14 14", size: 14, text: "M" },
+  undo: {
+    viewBox: "0 0 14 14",
+    size: 14,
+    paths: ["M5.5 2.5L3 5L5.5 7.5", "M3 5H8.5C10.7091 5 12.5 6.79086 12.5 9V9C12.5 11.2091 10.7091 13 8.5 13H5.5"]
+  },
+  copy: { viewBox: ICON_MOVE_COPY.viewBox, size: 14, paths: [...ICON_MOVE_COPY.paths] },
+  delete: { viewBox: "0 0 14 14", size: 14, paths: ["M3.25 3.25L10.75 10.75", "M10.75 3.25L3.25 10.75"] },
+  up: { viewBox: "0 0 14 14", size: 14, paths: ["M3.5 8.75L7 5.25L10.5 8.75"] },
+  down: { viewBox: "0 0 14 14", size: 14, paths: ["M3.5 5.25L7 8.75L10.5 5.25"] },
+  left: { viewBox: "0 0 14 14", size: 14, paths: ["M8.75 3.5L5.25 7L8.75 10.5"] },
+  right: { viewBox: "0 0 14 14", size: 14, paths: ["M5.25 3.5L8.75 7L5.25 10.5"] },
+  /* Sampling wears the enter dot — the surface's second confirm. */
+  sample: MOVE_GLYPH_DOT,
+  loop: { viewBox: ICON_MOVE_LOOP.viewBox, size: 14, paths: [...ICON_MOVE_LOOP.paths] },
+  capture: { viewBox: ICON_MOVE_CAPTURE.viewBox, size: 14, fills: [ICON_MOVE_CAPTURE.path] },
+  menu: { viewBox: "0 0 14 14", size: 14, paths: ["M2.5 3.5H11.5", "M2.5 7H11.5", "M2.5 10.5H11.5"] },
+  back: { viewBox: "0 0 14 14", size: 14, paths: ["M5.5 3L2.5 6L5.5 9", "M2.5 6H9.5C11.1569 6 12.5 7.34315 12.5 9V11.5"] },
+  jog_click: MOVE_GLYPH_DOT,
+  /* The Shift layer — one stand-in mark for now (see MOVE_GLYPH_STEP). */
+  set_overview: MOVE_GLYPH_STEP,
+  setup: MOVE_GLYPH_STEP,
+  workflow: MOVE_GLYPH_STEP,
+  step4: MOVE_GLYPH_STEP,
+  tempo: MOVE_GLYPH_STEP,
+  metronome: MOVE_GLYPH_STEP,
+  groove: MOVE_GLYPH_STEP,
+  pitches_16: MOVE_GLYPH_STEP,
+  scale: MOVE_GLYPH_STEP,
+  full_velocity: MOVE_GLYPH_STEP,
+  repeat: MOVE_GLYPH_STEP,
+  step12: MOVE_GLYPH_STEP,
+  step13: MOVE_GLYPH_STEP,
+  step14: MOVE_GLYPH_STEP,
+  double_loop: MOVE_GLYPH_STEP,
+  quantize: MOVE_GLYPH_STEP
+};
+var LUCIDE_ICONS = {
+  /* directions and traversal */
+  "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
+  "arrow-left": ["M19 12H5", "m12 19-7-7 7-7"],
+  "arrow-left-right": ["M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"],
+  "arrow-up": ["m5 12 7-7 7 7", "M12 19V5"],
+  "arrow-down": ["M12 5v14", "m19 12-7 7-7-7"],
+  "arrow-up-down": ["m21 16-4 4-4-4", "M17 20V4", "m3 8 4-4 4 4", "M7 4v16"],
+  "fold-horizontal": [
+    "M2 12h6",
+    "M22 12h-6",
+    "M12 2v2",
+    "M12 8v2",
+    "M12 14v2",
+    "M12 20v2",
+    "m19 9-3 3 3 3",
+    "m5 15 3-3-3-3"
+  ],
+  scissors: [
+    "M20 4 8.12 15.88",
+    "M14.47 14.48 20 20",
+    "M8.12 8.12 12 12",
+    "M6 3a3 3 0 1 0 0 6 3 3 0 1 0 0-6",
+    "M6 15a3 3 0 1 0 0 6 3 3 0 1 0 0-6"
+  ],
+  /* signal character */
+  "grid-2x2": ["M12 3v18", "M3 12h18", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"],
+  activity: ["M22 12h-4l-3 9L9 3l-3 9H2"],
+  waves: [
+    "M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
+    "M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
+    "M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"
+  ],
+  "audio-lines": ["M2 10v3", "M6 6v11", "M10 3v18", "M14 8v7", "M18 5v13", "M22 10v3"],
+  /* switches — what a boolean is about, drawn */
+  repeat: ["m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3"],
+  timer: ["M10 2h4", "M12 14l3-3", "M12 6a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"],
+  brain: [
+    "M12 18V5",
+    "M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4",
+    "M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5",
+    "M17.997 5.125a4 4 0 0 1 2.526 5.77",
+    "M18 18a4 4 0 0 0 2-7.464",
+    "M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517",
+    "M6 18a4 4 0 0 1-2-7.464",
+    "M6.003 5.125a4 4 0 0 0-2.526 5.77"
+  ],
+  /* actions — what a button does, drawn beside its name */
+  x: ["M18 6 6 18", "m6 6 12 12"],
+  "brush-cleaning": [
+    "m16 22-1-4",
+    "M19 13.99a1 1 0 0 0 1-1V12a2 2 0 0 0-2-2h-3a1 1 0 0 1-1-1V4a2 2 0 0 0-4 0v5a1 1 0 0 1-1 1H6a2 2 0 0 0-2 2v.99a1 1 0 0 0 1 1",
+    "M5 14h14l1.973 6.767A1 1 0 0 1 20 22H4a1 1 0 0 1-.973-1.233z",
+    "m8 22 1-4"
+  ],
+  sparkles: [
+    "M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z",
+    "M20 3v4",
+    "M22 5h-4",
+    "M4 17v2",
+    "M5 18H3"
+  ],
+  heart: ["M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"],
+  download: ["M12 15V3", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m7 10 5 5 5-5"],
+  wrench: ["M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"],
+  headphones: ["M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"],
+  /* restoration — the polish page's five switches */
+  "broom-sparkles": [
+    "M11 2v2",
+    "M12 3h-2",
+    "M13.5 10.5 22 2",
+    "M14.734 13.841a2 2 0 00-.314-2.42L12.58 9.58a2 2 0 00-2.421-.314l-7.657 4.461A1 1 0 002.3 15.3l6.403 6.403a1 1 0 001.571-.204z",
+    "M20 15v4",
+    "M22 17h-4",
+    "M4 4v4",
+    "m5 18 2-2",
+    "M6 6H2",
+    "m7.699 10.7 5.602 5.601"
+  ],
+  stethoscope: [
+    "M11 2v2",
+    "M5 2v2",
+    "M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1",
+    "M8 15a6 6 0 0 0 12 0v-3",
+    "M20 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4"
+  ],
+  "file-volume": [
+    "M4 11.55V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-1.95",
+    "M14 2v5a1 1 0 0 0 1 1h5",
+    "M12 15a5 5 0 0 1 0 6",
+    "M8 14.502a.5.5 0 0 0-.826-.381l-1.893 1.631a1 1 0 0 1-.651.243H3.5a.5.5 0 0 0-.5.501v3.006a.5.5 0 0 0 .5.501h1.129a1 1 0 0 1 .652.243l1.893 1.633a.5.5 0 0 0 .826-.38z"
+  ],
+  "cassette-tape": [
+    "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
+    "M8 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
+    "M8 12h8",
+    "M16 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
+    "m6 20 .7-2.9A1.4 1.4 0 0 1 8.1 16h7.8a1.4 1.4 0 0 1 1.4 1l.7 3"
+  ],
+  "audio-lines-x": [
+    "M2 10v3",
+    "M6 6v11",
+    "M10 3v18",
+    "M14 8v7",
+    "M18 5v6",
+    "M22 10v3",
+    "m16 17 5 5",
+    "m21 17-5 5"
+  ],
+  "disc-3": [
+    "M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20z",
+    "M6 12c0-1.7.7-3.2 1.8-4.2",
+    "M12 10a2 2 0 1 0 0 4 2 2 0 1 0 0-4z",
+    "M18 12c0 1.7-.7 3.2-1.8 4.2"
+  ],
+  "boom-box": [
+    "M4 9V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4",
+    "M8 8v1",
+    "M12 8v1",
+    "M16 8v1",
+    "M4 9h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z",
+    "M8 13a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
+    "M16 13a2 2 0 1 0 0 4 2 2 0 1 0 0-4"
+  ],
+  /* pages — what a track holds, drawn on its button */
+  "audio-waveform": ["M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2"],
+  settings: [
+    "M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915",
+    "M12 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6z"
+  ],
+  drum: [
+    "m2 2 8 8",
+    "m22 2-8 8",
+    "M12 4a10 5 0 1 0 0 10 10 5 0 1 0 0-10z",
+    "M7 13.4v7.9",
+    "M12 14v8",
+    "M17 13.4v7.9",
+    "M2 9v8a10 5 0 0 0 20 0V9"
+  ],
+  speaker: [
+    "M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z",
+    "M12 6h.01",
+    "M12 10a4 4 0 1 0 0 8 4 4 0 1 0 0-8z",
+    "M12 14h.01"
+  ],
+  "mouse-pointer-2": ["M4.04 4.69a.5.5 0 0 1 .65-.65l16 6.5a.5.5 0 0 1-.06.95l-6.13 1.58a2 2 0 0 0-1.43 1.43l-1.58 6.13a.5.5 0 0 1-.95.06z"],
+  target: [
+    "M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20z",
+    "M12 6a6 6 0 1 0 0 12 6 6 0 1 0 0-12z",
+    "M12 10a2 2 0 1 0 0 4 2 2 0 1 0 0-4z"
+  ],
+  disc: ["M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20z", "M12 10a2 2 0 1 0 0 4 2 2 0 1 0 0-4z"],
+  "mic-vocal": [
+    "m11 7.601-5.994 8.19a1 1 0 0 0 .1 1.298l.817.818a1 1 0 0 0 1.314.087L15.09 12",
+    "M16.5 21.174C15.5 20.5 14.372 20 13 20c-2.058 0-3.928 2.356-6 2-2.072-.356-2.775-3.369-1.5-4.5",
+    "M16 2a5 5 0 1 0 0 10 5 5 0 1 0 0-10z"
+  ],
+  piano: [
+    "M18.5 8c-1.4 0-2.6-.8-3.2-2A6.87 6.87 0 0 0 2 9v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-8.5C22 9.6 20.4 8 18.5 8",
+    "M2 14h20",
+    "M6 14v4",
+    "M10 14v4",
+    "M14 14v4",
+    "M18 14v4"
+  ],
+  layers: [
+    "M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z",
+    "M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12",
+    "M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"
+  ],
+  image: [
+    "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z",
+    "M9 7a2 2 0 1 0 0 4 2 2 0 1 0 0-4z",
+    "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"
+  ],
+  /* picture actions — what an image tool does to a picture, in a list's rows */
+  "wand-sparkles": [
+    "m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72",
+    "m14 7 3 3",
+    "M5 6v4",
+    "M19 14v4",
+    "M10 2v2",
+    "M7 8H3",
+    "M21 16h-4",
+    "M11 3H9"
+  ],
+  expand: ["m15 15 6 6", "m15 9 6-6", "M21 16v5h-5", "M21 8V3h-5", "M3 16v5h5", "m3 21 6-6", "M3 8V3h5", "M9 9 3 3"],
+  "message-circle": ["M7.9 20A9 9 0 1 0 4 16.1L2 22Z"],
+  shrink: ["m15 15 6 6m-6-6v4.8m0-4.8h4.8", "M9 19.8V15m0 0H4.2M9 15l-6 6", "M15 4.2V9m0 0h4.8M15 9l6-6", "M9 4.2V9m0 0H4.2M9 9 3 3"],
+  eraser: [
+    "M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21",
+    "m5.082 11.09 8.828 8.828"
+  ],
+  "image-upscale": [
+    "M16 3h5v5",
+    "M17 21h2a2 2 0 0 0 2-2",
+    "M21 12v3",
+    "m21 3-5 5",
+    "M3 7V5a2 2 0 0 1 2-2",
+    "m5 21 4.144-4.144a1.21 1.21 0 0 1 1.712 0L13 19",
+    "M9 3h3",
+    "M4 11h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z"
+  ],
+  "pen-tool": [
+    "M15.707 21.293a1 1 0 0 1-1.414 0l-1.586-1.586a1 1 0 0 1 0-1.414l5.586-5.586a1 1 0 0 1 1.414 0l1.586 1.586a1 1 0 0 1 0 1.414z",
+    "m18 13-1.375-6.874a1 1 0 0 0-.746-.776L3.235 2.028a1 1 0 0 0-1.207 1.207L5.35 15.879a1 1 0 0 0 .776.746L13 18",
+    "m2.3 2.3 7.286 7.286",
+    "M11 9a2 2 0 1 0 0 4 2 2 0 1 0 0-4z"
+  ],
+  "image-plus": [
+    "M16 5h6",
+    "M19 2v6",
+    "M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5",
+    "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21",
+    "M9 7a2 2 0 1 0 0 4 2 2 0 1 0 0-4z"
+  ],
+  paintbrush: [
+    "m14.622 17.897-10.68-2.913",
+    "M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z",
+    "M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15"
+  ]
+};
+var ICON_BADGE_OFF = "M17.203 19.3594L4.6875 6.7969C3.6094 8.25 3 10.0781 3 12C3 16.9688 7.031 21 12 21C13.969 21 15.75 20.3906 17.203 19.3594ZM19.359 17.2031C20.391 15.75 21 13.9219 21 12C21 7.0312 16.969 3 12 3C10.078 3 8.25 3.6094 6.797 4.6875L19.359 17.2031ZM0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24C5.391 24 0 18.6094 0 12Z";
+var ICON_BADGE_ON = "M12 24C5.391 24 0 18.6094 0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24ZM17.531 6.8438C17.016 6.4688 16.313 6.5625 15.984 7.0781L10.359 14.7656L7.922 12.3281C7.5 11.9062 6.75 11.9062 6.328 12.3281C5.906 12.7969 5.906 13.5 6.328 13.9219L9.703 17.2969C9.937 17.5312 10.266 17.6719 10.594 17.625C10.922 17.625 11.203 17.4375 11.391 17.1562L17.766 8.3906C18.141 7.9219 18.047 7.2188 17.531 6.8438Z";
+var MOD_GLYPHS = {
+  lfo: { paths: ["M3.5 12C5.75 5.75 9.5 5.75 12 12C14.5 18.25 18.25 18.25 20.5 12"] },
+  sh: {
+    circles: [
+      { cx: "8.75", cy: "8.75", r: "1.4" },
+      { cx: "15.25", cy: "8.75", r: "1.4" },
+      { cx: "12", cy: "12", r: "1.4" },
+      { cx: "8.75", cy: "15.25", r: "1.4" },
+      { cx: "15.25", cy: "15.25", r: "1.4" }
+    ]
+  },
+  adsr: { paths: ["M3 18L8.75 7.5L12.25 12.75H15.5L21 18"] },
+  keys: {
+    fills: [
+      "M8.1 2H10.9V11.1A1.4 1.4 0 0 1 8.1 11.1Z",
+      "M13.1 2H15.9V11.1A1.4 1.4 0 0 1 13.1 11.1Z"
+    ],
+    paths: ["M9.5 12.5V22", "M14.5 12.5V22"]
+  },
+  curve: { paths: ["M2.5 16.25H5C8 16.25 8.25 8.25 12 8.25C15.75 8.25 16 16.25 19 16.25H21.5"] },
+  audio: {
+    circles: [{ cx: "8.75", cy: "15.5", r: "2.25" }, { cx: "15", cy: "14.25", r: "2.25" }],
+    fills: ["M9.875 8.1L17.875 6.5V8.5L9.875 10.1Z"],
+    paths: ["M10.75 15.5V9", "M17 14.25V7.5"]
+  },
+  /* automation: a lane's run with the playhead standing across it */
+  timeline: { paths: ["M3 16.5H9L14 8.5H21", "M7 4.5V19.5"] }
+};
+
+// src/move-track-labels.ts
+var import_TweakStore3 = require("tweakers/store");
+var MOVE_PANEL_SETTINGS = "move-panel";
+var MOVE_TRACK_LABEL_STYLES = ["name", "both", "icon"];
+var STYLE_LABELS = {
+  name: "Name",
+  both: "Icon + name",
+  icon: "Icon"
+};
+function moveTrackIcon(panel) {
+  return panel.icon && LUCIDE_ICONS[panel.icon] ? panel.icon : void 0;
+}
+function moveTrackLabelStyle(values, hasIcons) {
+  if (!hasIcons) return "name";
+  return MOVE_TRACK_LABEL_STYLES.find((s) => s === values?.trackLabels) ?? "both";
+}
+var MoveTrackLabels = {
+  /**
+   * Put the Panel page in the settings room. Idempotent; the panel calls it
+   * on mount, so the room holds its pages from the start.
+   */
+  ensureSettings() {
+    if (import_TweakStore3.TweakStore.getPanel(MOVE_PANEL_SETTINGS)) return;
+    import_TweakStore3.TweakStore.registerPanel(
+      MOVE_PANEL_SETTINGS,
+      "Panel",
+      {
+        trackLabels: {
+          type: "select",
+          default: "both",
+          options: MOVE_TRACK_LABEL_STYLES.map((s) => ({ value: s, label: STYLE_LABELS[s] }))
+        },
+        // The steering hand's pace (move-steer): pointer pixels to hand
+        // pixels inside the panel, across and up and down apart.
+        // The steering hand holds the pointer over the controls (on), or
+        // the pointer stays free and the control under it is the one in
+        // the hand (off) — ⌘, two fingers and the keys turn it either way.
+        steerHand: { type: "toggle", default: true },
+        handSpeedX: { type: "slider", default: MOVE_STEER_GAIN_X, min: 0.5, max: 5, step: 0.1, display: "value" },
+        handSpeedY: { type: "slider", default: MOVE_STEER_GAIN_Y, min: 0.5, max: 5, step: 0.1, display: "value" }
+      },
+      void 0,
+      { kind: "kit", persist: true, labels: { trackLabels: "Track labels", steerHand: "Panel hand", handSpeedX: "Hand speed \u2190\u2192", handSpeedY: "Hand speed \u2191\u2193" } }
+    );
+  },
+  /** Grey the choice out while no page on the row carries a picture. */
+  setIconsAvailable(available) {
+    import_TweakStore3.TweakStore.setDisabled(MOVE_PANEL_SETTINGS, "trackLabels", !available);
+  }
+};
 
 // src/components/move-slots.tsx
 var import_react3 = require("react");
@@ -1326,356 +1827,6 @@ function moveBandCuts(low, high) {
 
 // src/components/move-visuals.tsx
 var import_react = require("react");
-
-// src/icons.ts
-var ICON_CHEVRON_RIGHT = "M9.5 6L15.5 12L9.5 18";
-var ICON_CHEVRON_LEFT = "M14.5 6L8.5 12L14.5 18";
-var ICON_ELLIPSIS = [
-  { cx: "5.5", cy: "12" },
-  { cx: "12", cy: "12" },
-  { cx: "18.5", cy: "12" }
-];
-var ICON_CHECK = "M5 12.75L10 19L19 5";
-var ICON_SEARCH = "M10.5 4.5C7.18629 4.5 4.5 7.18629 4.5 10.5C4.5 13.8137 7.18629 16.5 10.5 16.5C13.8137 16.5 16.5 13.8137 16.5 10.5C16.5 7.18629 13.8137 4.5 10.5 4.5ZM15 15L20 20";
-var ICON_PLAY = "M9.24394 2.36758C7.41419 1.18362 5 2.49701 5 4.67639V19.3238C5 21.5032 7.41419 22.8166 9.24394 21.6326L20.5624 14.3089C22.2371 13.2253 22.2372 10.775 20.5624 9.69129L9.24394 2.36758Z";
-var ICON_LOOP = [
-  "M17 2L21 6L17 10",
-  "M3 11V9C3 7.34315 4.34315 6 6 6H21",
-  "M7 22L3 18L7 14",
-  "M21 13V15C21 16.6569 19.6569 18 18 18H3"
-];
-var ICON_CLOSE = "M6 6L18 18M6 18L18 6";
-var ICON_MOVE_CAPTURE = {
-  viewBox: "0 0 14 14",
-  path: "M1 0H5V2H2V5H0V0H1ZM2 10V12H5V14H0V9H2V10ZM10 0H14V5H12V2H9V0H10ZM14 10V14H9V12H12V9H14V10Z"
-};
-var ICON_MOVE_ENTER = {
-  viewBox: "0 0 12 12",
-  circle: { cx: "6", cy: "6", r: "6" }
-};
-var ICON_MOVE_LOOP = {
-  viewBox: "0 0 14 14",
-  paths: ["M10 1L12.5 3.5L10 6", "M1.5 7.5V6C1.5 4.61929 2.61929 3.5 4 3.5H12", "M4 13L1.5 10.5L4 8", "M12.5 6.5V8C12.5 9.38071 11.3807 10.5 10 10.5H2"]
-};
-var ICON_MOVE_COPY = {
-  viewBox: "0 0 14 14",
-  paths: [
-    "M5.5 5.5H12.5V12.5H5.5V5.5Z",
-    "M3.5 8.5H2.5C1.94772 8.5 1.5 8.05228 1.5 7.5V2.5C1.5 1.94772 1.94772 1.5 2.5 1.5H7.5C8.05228 1.5 8.5 1.94772 8.5 2.5V3.5"
-  ]
-};
-var MOVE_GLYPH_TEXT_FONT = "Helvetica, 'Helvetica Neue', Arial, system-ui, sans-serif";
-var MOVE_GLYPH_DOT = {
-  viewBox: ICON_MOVE_ENTER.viewBox,
-  size: 12,
-  circles: [ICON_MOVE_ENTER.circle]
-};
-var MOVE_GLYPH_STEP = {
-  viewBox: "0 0 14 14",
-  size: 14,
-  paths: ["M3 1.5H11V9.5H3V1.5Z", "M4.5 12.5H9.5"]
-};
-var MOVE_FUNCTION_ICONS = {
-  play: { viewBox: "0 0 14 14", size: 14, paths: ["M4 2.5L11.5 7L4 11.5V2.5Z"] },
-  rec: {
-    viewBox: "0 0 14 14",
-    size: 14,
-    paths: ["M7 2.5A4.5 4.5 0 1 0 7 11.5A4.5 4.5 0 1 0 7 2.5Z"],
-    circles: [{ cx: "7", cy: "7", r: "2" }]
-  },
-  /* Mute is a letter, not a drawing: the "M", set in Helvetica on the same
-     14px grid as the drawn marks. */
-  mute: { viewBox: "0 0 14 14", size: 14, text: "M" },
-  undo: {
-    viewBox: "0 0 14 14",
-    size: 14,
-    paths: ["M5.5 2.5L3 5L5.5 7.5", "M3 5H8.5C10.7091 5 12.5 6.79086 12.5 9V9C12.5 11.2091 10.7091 13 8.5 13H5.5"]
-  },
-  copy: { viewBox: ICON_MOVE_COPY.viewBox, size: 14, paths: [...ICON_MOVE_COPY.paths] },
-  delete: { viewBox: "0 0 14 14", size: 14, paths: ["M3.25 3.25L10.75 10.75", "M10.75 3.25L3.25 10.75"] },
-  up: { viewBox: "0 0 14 14", size: 14, paths: ["M3.5 8.75L7 5.25L10.5 8.75"] },
-  down: { viewBox: "0 0 14 14", size: 14, paths: ["M3.5 5.25L7 8.75L10.5 5.25"] },
-  left: { viewBox: "0 0 14 14", size: 14, paths: ["M8.75 3.5L5.25 7L8.75 10.5"] },
-  right: { viewBox: "0 0 14 14", size: 14, paths: ["M5.25 3.5L8.75 7L5.25 10.5"] },
-  /* Sampling wears the enter dot — the surface's second confirm. */
-  sample: MOVE_GLYPH_DOT,
-  loop: { viewBox: ICON_MOVE_LOOP.viewBox, size: 14, paths: [...ICON_MOVE_LOOP.paths] },
-  capture: { viewBox: ICON_MOVE_CAPTURE.viewBox, size: 14, fills: [ICON_MOVE_CAPTURE.path] },
-  menu: { viewBox: "0 0 14 14", size: 14, paths: ["M2.5 3.5H11.5", "M2.5 7H11.5", "M2.5 10.5H11.5"] },
-  back: { viewBox: "0 0 14 14", size: 14, paths: ["M5.5 3L2.5 6L5.5 9", "M2.5 6H9.5C11.1569 6 12.5 7.34315 12.5 9V11.5"] },
-  jog_click: MOVE_GLYPH_DOT,
-  /* The Shift layer — one stand-in mark for now (see MOVE_GLYPH_STEP). */
-  set_overview: MOVE_GLYPH_STEP,
-  setup: MOVE_GLYPH_STEP,
-  workflow: MOVE_GLYPH_STEP,
-  step4: MOVE_GLYPH_STEP,
-  tempo: MOVE_GLYPH_STEP,
-  metronome: MOVE_GLYPH_STEP,
-  groove: MOVE_GLYPH_STEP,
-  pitches_16: MOVE_GLYPH_STEP,
-  scale: MOVE_GLYPH_STEP,
-  full_velocity: MOVE_GLYPH_STEP,
-  repeat: MOVE_GLYPH_STEP,
-  step12: MOVE_GLYPH_STEP,
-  step13: MOVE_GLYPH_STEP,
-  step14: MOVE_GLYPH_STEP,
-  double_loop: MOVE_GLYPH_STEP,
-  quantize: MOVE_GLYPH_STEP
-};
-var LUCIDE_ICONS = {
-  /* directions and traversal */
-  "arrow-right": ["M5 12h14", "m12 5 7 7-7 7"],
-  "arrow-left": ["M19 12H5", "m12 19-7-7 7-7"],
-  "arrow-left-right": ["M8 3 4 7l4 4", "M4 7h16", "m16 21 4-4-4-4", "M20 17H4"],
-  "arrow-up": ["m5 12 7-7 7 7", "M12 19V5"],
-  "arrow-down": ["M12 5v14", "m19 12-7 7-7-7"],
-  "arrow-up-down": ["m21 16-4 4-4-4", "M17 20V4", "m3 8 4-4 4 4", "M7 4v16"],
-  "fold-horizontal": [
-    "M2 12h6",
-    "M22 12h-6",
-    "M12 2v2",
-    "M12 8v2",
-    "M12 14v2",
-    "M12 20v2",
-    "m19 9-3 3 3 3",
-    "m5 15 3-3-3-3"
-  ],
-  scissors: [
-    "M20 4 8.12 15.88",
-    "M14.47 14.48 20 20",
-    "M8.12 8.12 12 12",
-    "M6 3a3 3 0 1 0 0 6 3 3 0 1 0 0-6",
-    "M6 15a3 3 0 1 0 0 6 3 3 0 1 0 0-6"
-  ],
-  /* signal character */
-  "grid-2x2": ["M12 3v18", "M3 12h18", "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"],
-  activity: ["M22 12h-4l-3 9L9 3l-3 9H2"],
-  waves: [
-    "M2 6c.6.5 1.2 1 2.5 1C7 7 7 5 9.5 5c2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
-    "M2 12c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1",
-    "M2 18c.6.5 1.2 1 2.5 1 2.5 0 2.5-2 5-2 2.6 0 2.4 2 5 2 2.5 0 2.5-2 5-2 1.3 0 1.9.5 2.5 1"
-  ],
-  "audio-lines": ["M2 10v3", "M6 6v11", "M10 3v18", "M14 8v7", "M18 5v13", "M22 10v3"],
-  /* switches — what a boolean is about, drawn */
-  repeat: ["m17 2 4 4-4 4", "M3 11v-1a4 4 0 0 1 4-4h14", "m7 22-4-4 4-4", "M21 13v1a4 4 0 0 1-4 4H3"],
-  timer: ["M10 2h4", "M12 14l3-3", "M12 6a8 8 0 1 0 0 16 8 8 0 0 0 0-16z"],
-  brain: [
-    "M12 18V5",
-    "M15 13a4.17 4.17 0 0 1-3-4 4.17 4.17 0 0 1-3 4",
-    "M17.598 6.5A3 3 0 1 0 12 5a3 3 0 1 0-5.598 1.5",
-    "M17.997 5.125a4 4 0 0 1 2.526 5.77",
-    "M18 18a4 4 0 0 0 2-7.464",
-    "M19.967 17.483A4 4 0 1 1 12 18a4 4 0 1 1-7.967-.517",
-    "M6 18a4 4 0 0 1-2-7.464",
-    "M6.003 5.125a4 4 0 0 0-2.526 5.77"
-  ],
-  /* actions — what a button does, drawn beside its name */
-  x: ["M18 6 6 18", "m6 6 12 12"],
-  "brush-cleaning": [
-    "m16 22-1-4",
-    "M19 13.99a1 1 0 0 0 1-1V12a2 2 0 0 0-2-2h-3a1 1 0 0 1-1-1V4a2 2 0 0 0-4 0v5a1 1 0 0 1-1 1H6a2 2 0 0 0-2 2v.99a1 1 0 0 0 1 1",
-    "M5 14h14l1.973 6.767A1 1 0 0 1 20 22H4a1 1 0 0 1-.973-1.233z",
-    "m8 22 1-4"
-  ],
-  sparkles: [
-    "M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z",
-    "M20 3v4",
-    "M22 5h-4",
-    "M4 17v2",
-    "M5 18H3"
-  ],
-  heart: ["M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"],
-  download: ["M12 15V3", "M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4", "m7 10 5 5 5-5"],
-  wrench: ["M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"],
-  headphones: ["M3 14h3a2 2 0 0 1 2 2v3a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-7a9 9 0 0 1 18 0v7a2 2 0 0 1-2 2h-1a2 2 0 0 1-2-2v-3a2 2 0 0 1 2-2h3"],
-  /* restoration — the polish page's five switches */
-  "broom-sparkles": [
-    "M11 2v2",
-    "M12 3h-2",
-    "M13.5 10.5 22 2",
-    "M14.734 13.841a2 2 0 00-.314-2.42L12.58 9.58a2 2 0 00-2.421-.314l-7.657 4.461A1 1 0 002.3 15.3l6.403 6.403a1 1 0 001.571-.204z",
-    "M20 15v4",
-    "M22 17h-4",
-    "M4 4v4",
-    "m5 18 2-2",
-    "M6 6H2",
-    "m7.699 10.7 5.602 5.601"
-  ],
-  stethoscope: [
-    "M11 2v2",
-    "M5 2v2",
-    "M5 3H4a2 2 0 0 0-2 2v4a6 6 0 0 0 12 0V5a2 2 0 0 0-2-2h-1",
-    "M8 15a6 6 0 0 0 12 0v-3",
-    "M20 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4"
-  ],
-  "file-volume": [
-    "M4 11.55V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.706.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2h-1.95",
-    "M14 2v5a1 1 0 0 0 1 1h5",
-    "M12 15a5 5 0 0 1 0 6",
-    "M8 14.502a.5.5 0 0 0-.826-.381l-1.893 1.631a1 1 0 0 1-.651.243H3.5a.5.5 0 0 0-.5.501v3.006a.5.5 0 0 0 .5.501h1.129a1 1 0 0 1 .652.243l1.893 1.633a.5.5 0 0 0 .826-.38z"
-  ],
-  "cassette-tape": [
-    "M4 4h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2z",
-    "M8 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
-    "M8 12h8",
-    "M16 8a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
-    "m6 20 .7-2.9A1.4 1.4 0 0 1 8.1 16h7.8a1.4 1.4 0 0 1 1.4 1l.7 3"
-  ],
-  "audio-lines-x": [
-    "M2 10v3",
-    "M6 6v11",
-    "M10 3v18",
-    "M14 8v7",
-    "M18 5v6",
-    "M22 10v3",
-    "m16 17 5 5",
-    "m21 17-5 5"
-  ],
-  "disc-3": [
-    "M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20z",
-    "M6 12c0-1.7.7-3.2 1.8-4.2",
-    "M12 10a2 2 0 1 0 0 4 2 2 0 1 0 0-4z",
-    "M18 12c0 1.7-.7 3.2-1.8 4.2"
-  ],
-  "boom-box": [
-    "M4 9V5a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v4",
-    "M8 8v1",
-    "M12 8v1",
-    "M16 8v1",
-    "M4 9h16a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-8a2 2 0 0 1 2-2z",
-    "M8 13a2 2 0 1 0 0 4 2 2 0 1 0 0-4",
-    "M16 13a2 2 0 1 0 0 4 2 2 0 1 0 0-4"
-  ],
-  /* pages — what a track holds, drawn on its button */
-  "audio-waveform": ["M2 13a2 2 0 0 0 2-2V7a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0V4a2 2 0 0 1 4 0v13a2 2 0 0 0 4 0v-4a2 2 0 0 1 2-2"],
-  settings: [
-    "M9.671 4.136a2.34 2.34 0 0 1 4.659 0 2.34 2.34 0 0 0 3.319 1.915 2.34 2.34 0 0 1 2.33 4.033 2.34 2.34 0 0 0 0 3.831 2.34 2.34 0 0 1-2.33 4.033 2.34 2.34 0 0 0-3.319 1.915 2.34 2.34 0 0 1-4.659 0 2.34 2.34 0 0 0-3.32-1.915 2.34 2.34 0 0 1-2.33-4.033 2.34 2.34 0 0 0 0-3.831A2.34 2.34 0 0 1 6.35 6.051a2.34 2.34 0 0 0 3.319-1.915",
-    "M12 9a3 3 0 1 0 0 6 3 3 0 1 0 0-6z"
-  ],
-  drum: [
-    "m2 2 8 8",
-    "m22 2-8 8",
-    "M12 4a10 5 0 1 0 0 10 10 5 0 1 0 0-10z",
-    "M7 13.4v7.9",
-    "M12 14v8",
-    "M17 13.4v7.9",
-    "M2 9v8a10 5 0 0 0 20 0V9"
-  ],
-  speaker: [
-    "M6 2h12a2 2 0 0 1 2 2v16a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z",
-    "M12 6h.01",
-    "M12 10a4 4 0 1 0 0 8 4 4 0 1 0 0-8z",
-    "M12 14h.01"
-  ],
-  "mouse-pointer-2": ["M4.04 4.69a.5.5 0 0 1 .65-.65l16 6.5a.5.5 0 0 1-.06.95l-6.13 1.58a2 2 0 0 0-1.43 1.43l-1.58 6.13a.5.5 0 0 1-.95.06z"],
-  target: [
-    "M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20z",
-    "M12 6a6 6 0 1 0 0 12 6 6 0 1 0 0-12z",
-    "M12 10a2 2 0 1 0 0 4 2 2 0 1 0 0-4z"
-  ],
-  disc: ["M12 2a10 10 0 1 0 0 20 10 10 0 1 0 0-20z", "M12 10a2 2 0 1 0 0 4 2 2 0 1 0 0-4z"],
-  "mic-vocal": [
-    "m11 7.601-5.994 8.19a1 1 0 0 0 .1 1.298l.817.818a1 1 0 0 0 1.314.087L15.09 12",
-    "M16.5 21.174C15.5 20.5 14.372 20 13 20c-2.058 0-3.928 2.356-6 2-2.072-.356-2.775-3.369-1.5-4.5",
-    "M16 2a5 5 0 1 0 0 10 5 5 0 1 0 0-10z"
-  ],
-  piano: [
-    "M18.5 8c-1.4 0-2.6-.8-3.2-2A6.87 6.87 0 0 0 2 9v11a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-8.5C22 9.6 20.4 8 18.5 8",
-    "M2 14h20",
-    "M6 14v4",
-    "M10 14v4",
-    "M14 14v4",
-    "M18 14v4"
-  ],
-  layers: [
-    "M12.83 2.18a2 2 0 0 0-1.66 0L2.6 6.08a1 1 0 0 0 0 1.83l8.58 3.91a2 2 0 0 0 1.66 0l8.58-3.9a1 1 0 0 0 0-1.83z",
-    "M2 12a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 12",
-    "M2 17a1 1 0 0 0 .58.91l8.6 3.91a2 2 0 0 0 1.65 0l8.58-3.9A1 1 0 0 0 22 17"
-  ],
-  image: [
-    "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z",
-    "M9 7a2 2 0 1 0 0 4 2 2 0 1 0 0-4z",
-    "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21"
-  ],
-  /* picture actions — what an image tool does to a picture, in a list's rows */
-  "wand-sparkles": [
-    "m21.64 3.64-1.28-1.28a1.21 1.21 0 0 0-1.72 0L2.36 18.64a1.21 1.21 0 0 0 0 1.72l1.28 1.28a1.2 1.2 0 0 0 1.72 0L21.64 5.36a1.2 1.2 0 0 0 0-1.72",
-    "m14 7 3 3",
-    "M5 6v4",
-    "M19 14v4",
-    "M10 2v2",
-    "M7 8H3",
-    "M21 16h-4",
-    "M11 3H9"
-  ],
-  expand: ["m15 15 6 6", "m15 9 6-6", "M21 16v5h-5", "M21 8V3h-5", "M3 16v5h5", "m3 21 6-6", "M3 8V3h5", "M9 9 3 3"],
-  "message-circle": ["M7.9 20A9 9 0 1 0 4 16.1L2 22Z"],
-  shrink: ["m15 15 6 6m-6-6v4.8m0-4.8h4.8", "M9 19.8V15m0 0H4.2M9 15l-6 6", "M15 4.2V9m0 0h4.8M15 9l6-6", "M9 4.2V9m0 0H4.2M9 9 3 3"],
-  eraser: [
-    "M21 21H8a2 2 0 0 1-1.42-.587l-3.994-3.999a2 2 0 0 1 0-2.828l10-10a2 2 0 0 1 2.829 0l5.999 6a2 2 0 0 1 0 2.828L12.834 21",
-    "m5.082 11.09 8.828 8.828"
-  ],
-  "image-upscale": [
-    "M16 3h5v5",
-    "M17 21h2a2 2 0 0 0 2-2",
-    "M21 12v3",
-    "m21 3-5 5",
-    "M3 7V5a2 2 0 0 1 2-2",
-    "m5 21 4.144-4.144a1.21 1.21 0 0 1 1.712 0L13 19",
-    "M9 3h3",
-    "M4 11h8a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-8a1 1 0 0 1 1-1z"
-  ],
-  "pen-tool": [
-    "M15.707 21.293a1 1 0 0 1-1.414 0l-1.586-1.586a1 1 0 0 1 0-1.414l5.586-5.586a1 1 0 0 1 1.414 0l1.586 1.586a1 1 0 0 1 0 1.414z",
-    "m18 13-1.375-6.874a1 1 0 0 0-.746-.776L3.235 2.028a1 1 0 0 0-1.207 1.207L5.35 15.879a1 1 0 0 0 .776.746L13 18",
-    "m2.3 2.3 7.286 7.286",
-    "M11 9a2 2 0 1 0 0 4 2 2 0 1 0 0-4z"
-  ],
-  "image-plus": [
-    "M16 5h6",
-    "M19 2v6",
-    "M21 11.5V19a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7.5",
-    "m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21",
-    "M9 7a2 2 0 1 0 0 4 2 2 0 1 0 0-4z"
-  ],
-  paintbrush: [
-    "m14.622 17.897-10.68-2.913",
-    "M18.376 2.622a1 1 0 1 1 3.002 3.002L17.36 9.643a.5.5 0 0 0 0 .707l.944.944a2.41 2.41 0 0 1 0 3.408l-.944.944a.5.5 0 0 1-.707 0L8.354 7.348a.5.5 0 0 1 0-.707l.944-.944a2.41 2.41 0 0 1 3.408 0l.944.944a.5.5 0 0 0 .707 0z",
-    "M9 8c-1.804 2.71-3.97 3.46-6.583 3.948a.507.507 0 0 0-.302.819l7.32 8.883a1 1 0 0 0 1.185.204C12.735 20.405 16 16.792 16 15"
-  ]
-};
-var ICON_BADGE_OFF = "M17.203 19.3594L4.6875 6.7969C3.6094 8.25 3 10.0781 3 12C3 16.9688 7.031 21 12 21C13.969 21 15.75 20.3906 17.203 19.3594ZM19.359 17.2031C20.391 15.75 21 13.9219 21 12C21 7.0312 16.969 3 12 3C10.078 3 8.25 3.6094 6.797 4.6875L19.359 17.2031ZM0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24C5.391 24 0 18.6094 0 12Z";
-var ICON_BADGE_ON = "M12 24C5.391 24 0 18.6094 0 12C0 5.3906 5.391 0 12 0C18.609 0 24 5.3906 24 12C24 18.6094 18.609 24 12 24ZM17.531 6.8438C17.016 6.4688 16.313 6.5625 15.984 7.0781L10.359 14.7656L7.922 12.3281C7.5 11.9062 6.75 11.9062 6.328 12.3281C5.906 12.7969 5.906 13.5 6.328 13.9219L9.703 17.2969C9.937 17.5312 10.266 17.6719 10.594 17.625C10.922 17.625 11.203 17.4375 11.391 17.1562L17.766 8.3906C18.141 7.9219 18.047 7.2188 17.531 6.8438Z";
-var MOD_GLYPHS = {
-  lfo: { paths: ["M3.5 12C5.75 5.75 9.5 5.75 12 12C14.5 18.25 18.25 18.25 20.5 12"] },
-  sh: {
-    circles: [
-      { cx: "8.75", cy: "8.75", r: "1.4" },
-      { cx: "15.25", cy: "8.75", r: "1.4" },
-      { cx: "12", cy: "12", r: "1.4" },
-      { cx: "8.75", cy: "15.25", r: "1.4" },
-      { cx: "15.25", cy: "15.25", r: "1.4" }
-    ]
-  },
-  adsr: { paths: ["M3 18L8.75 7.5L12.25 12.75H15.5L21 18"] },
-  keys: {
-    fills: [
-      "M8.1 2H10.9V11.1A1.4 1.4 0 0 1 8.1 11.1Z",
-      "M13.1 2H15.9V11.1A1.4 1.4 0 0 1 13.1 11.1Z"
-    ],
-    paths: ["M9.5 12.5V22", "M14.5 12.5V22"]
-  },
-  curve: { paths: ["M2.5 16.25H5C8 16.25 8.25 8.25 12 8.25C15.75 8.25 16 16.25 19 16.25H21.5"] },
-  audio: {
-    circles: [{ cx: "8.75", cy: "15.5", r: "2.25" }, { cx: "15", cy: "14.25", r: "2.25" }],
-    fills: ["M9.875 8.1L17.875 6.5V8.5L9.875 10.1Z"],
-    paths: ["M10.75 15.5V9", "M17 14.25V7.5"]
-  },
-  /* automation: a lane's run with the playhead standing across it */
-  timeline: { paths: ["M3 16.5H9L14 8.5H21", "M7 4.5V19.5"] }
-};
-
-// src/components/move-visuals.tsx
 var import_jsx_runtime = require("react/jsx-runtime");
 var MOVE_GAUGE = { r: 36, base: 18, half: 43, top: 37, height: 56, sweep: 110, ticks: 11 };
 var place = (position) => Math.max(0, Math.min(1, position));
@@ -3038,7 +3189,7 @@ function dialOrigin(meta) {
 }
 
 // src/transition-math.ts
-var import_TweakStore3 = require("tweakers/store");
+var import_TweakStore4 = require("tweakers/store");
 function round2(value) {
   return Math.round(value * 100) / 100;
 }
@@ -3046,7 +3197,7 @@ function clamp4(value, min, max) {
   return Math.min(max, Math.max(min, value));
 }
 function isTransitionConfig(value) {
-  return (0, import_TweakStore3.isSpringConfigValue)(value) || (0, import_TweakStore3.isEasingConfigValue)(value);
+  return (0, import_TweakStore4.isSpringConfigValue)(value) || (0, import_TweakStore4.isEasingConfigValue)(value);
 }
 function isPhysicsSpring(transition) {
   return transition.type === "spring" && (transition.stiffness !== void 0 || transition.damping !== void 0 || transition.mass !== void 0);
@@ -4806,6 +4957,9 @@ var import_jsx_runtime4 = require("react/jsx-runtime");
 function MovePadList({ panelId, path, label, icon, face, view, disabled }) {
   const root = (0, import_react4.useRef)(null);
   const open2 = view?.panelId === panelId && view.path === path;
+  const hovered = (0, import_react4.useRef)(false);
+  if (!open2) hovered.current = false;
+  const free = () => import_TweakStore5.TweakStore.getValues(MOVE_PANEL_SETTINGS)?.steerHand === false;
   const shown = open2 ? view.submitLabel ?? label : MovePadListStore.choice(panelId, path)?.label ?? label;
   const drawn = face && !(open2 && view.submitLabel) ? face : null;
   (0, import_react4.useEffect)(() => () => {
@@ -4846,33 +5000,51 @@ function MovePadList({ panelId, path, label, icon, face, view, disabled }) {
       window.removeEventListener("move-tweakers:jog-click", jogClick, true);
     };
   }, [open2]);
-  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)("div", { className: "tweakers-move-pad-list-anchor", ref: root, children: [
-    /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
-      "button",
-      {
-        type: "button",
-        className: "tweakers-move-pad",
-        "data-kind": "list",
-        "data-confirm": open2 || void 0,
-        "data-pending": open2 && view.pending || void 0,
-        "aria-expanded": open2,
-        "aria-haspopup": "listbox",
-        "aria-busy": open2 && view.pending || void 0,
-        disabled: disabled || open2 && view.pending,
-        "data-face": drawn?.kind,
-        "aria-label": drawn ? shown : void 0,
-        title: drawn ? shown : void 0,
-        onClick: () => {
-          void MovePadListStore.activate(panelId, path);
-        },
-        children: drawn ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadFaceBody, { drawing: drawn }) : icon ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadIconLabelBody, { icon, label: shown }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadActionBody, { label: shown })
-      }
-    ),
-    open2 && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "tweakers-move-dial-screen tweakers-move-pad-list-overlay", onWheel: (event) => {
-      event.stopPropagation();
-      MovePadListStore.move(event.deltaY);
-    }, children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadListBody, { view, onCursor: (index) => MovePadListStore.setCursor(index), onToggle: () => MovePadListStore.toggleCursor() }) })
-  ] });
+  return /* @__PURE__ */ (0, import_jsx_runtime4.jsxs)(
+    "div",
+    {
+      className: "tweakers-move-pad-list-anchor",
+      ref: root,
+      "data-hover-open": open2 && hovered.current || void 0,
+      onPointerEnter: (e) => {
+        if (e.pointerType !== "mouse" || open2 || disabled || !free()) return;
+        hovered.current = true;
+        MovePadListStore.open(panelId, path);
+      },
+      onPointerLeave: () => {
+        if (open2 && hovered.current && !view.pending) MovePadListStore.close();
+      },
+      children: [
+        /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(
+          "button",
+          {
+            type: "button",
+            className: "tweakers-move-pad",
+            "data-kind": "list",
+            "data-confirm": open2 || void 0,
+            "data-pending": open2 && view.pending || void 0,
+            "aria-expanded": open2,
+            "aria-haspopup": "listbox",
+            "aria-busy": open2 && view.pending || void 0,
+            disabled: disabled || open2 && view.pending,
+            "data-face": drawn?.kind,
+            "aria-label": drawn ? shown : void 0,
+            title: drawn ? shown : void 0,
+            onClick: () => {
+              if (open2 && hovered.current && view.single) return;
+              hovered.current = false;
+              void MovePadListStore.activate(panelId, path);
+            },
+            children: drawn ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadFaceBody, { drawing: drawn }) : icon ? /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadIconLabelBody, { icon, label: shown }) : /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadActionBody, { label: shown })
+          }
+        ),
+        open2 && /* @__PURE__ */ (0, import_jsx_runtime4.jsx)("div", { className: "tweakers-move-dial-screen tweakers-move-pad-list-overlay", onWheel: (event) => {
+          event.stopPropagation();
+          MovePadListStore.move(event.deltaY);
+        }, children: /* @__PURE__ */ (0, import_jsx_runtime4.jsx)(MovePadListBody, { view, onCursor: (index) => MovePadListStore.setCursor(index), onToggle: () => MovePadListStore.toggleCursor() }) })
+      ]
+    }
+  );
 }
 
 // src/components/PresetExploration.tsx
@@ -4880,7 +5052,7 @@ var import_react5 = require("react");
 var import_react6 = require("motion/react");
 
 // src/preset-exploration.ts
-var import_TweakStore4 = require("tweakers/store");
+var import_TweakStore6 = require("tweakers/store");
 
 // src/preset-genetics.ts
 var cloneDNA = (value) => structuredClone(value);
@@ -5077,7 +5249,7 @@ var ExplorationStore = class {
   }
   get adapter() {
     if (!this.hostOwned) return void 0;
-    const adapter = this.state ? import_TweakStore4.TweakStore.getPresetProvider(this.state.panelId)?.exploration : this.initialAdapter;
+    const adapter = this.state ? import_TweakStore6.TweakStore.getPresetProvider(this.state.panelId)?.exploration : this.initialAdapter;
     return adapter ?? this.initialAdapter;
   }
   reportError(message) {
@@ -5136,7 +5308,7 @@ var ExplorationStore = class {
     if (this.history.length > 32) this.history.shift();
   }
   baseline() {
-    return cloneDNA(this.adapter ? this.live ?? this.original ?? {} : import_TweakStore4.TweakStore.getValues(this.state.panelId));
+    return cloneDNA(this.adapter ? this.live ?? this.original ?? {} : import_TweakStore6.TweakStore.getValues(this.state.panelId));
   }
   async capture() {
     return cloneDNA(this.adapter ? await this.adapter.capture() : this.baseline());
@@ -5147,7 +5319,7 @@ var ExplorationStore = class {
       if (!s || this.state !== s || revision !== this.previewRevision || this.closing) return;
       try {
         if (this.adapter) await this.adapter.preview(cloneDNA(values));
-        else import_TweakStore4.TweakStore.previewValues(s.panelId, cloneDNA(values));
+        else import_TweakStore6.TweakStore.previewValues(s.panelId, cloneDNA(values));
         this.live = cloneDNA(values);
       } catch (e) {
         s.error = `Preview failed: ${e instanceof Error ? e.message : e}`;
@@ -5157,12 +5329,12 @@ var ExplorationStore = class {
   }
   async open(panelId) {
     if (this.state) return;
-    const provider = import_TweakStore4.TweakStore.getPresetProvider(panelId);
+    const provider = import_TweakStore6.TweakStore.getPresetProvider(panelId);
     this.initialAdapter = provider?.exploration;
     this.hostOwned = !!provider;
     const first = tree(1);
-    const parameters = cloneDNA(this.adapter?.parameters ?? collectGenes(import_TweakStore4.TweakStore.getPanel(panelId)?.controls ?? []));
-    const target = import_TweakStore4.TweakStore.getPresetPersistenceTarget(panelId);
+    const parameters = cloneDNA(this.adapter?.parameters ?? collectGenes(import_TweakStore6.TweakStore.getPanel(panelId)?.controls ?? []));
+    const target = import_TweakStore6.TweakStore.getPresetPersistenceTarget(panelId);
     this.storageKey = target ? `${target.key}:exploration:v1` : null;
     this.storageName = target?.storage ?? "localStorage";
     let previous = this.cache.get(panelId);
@@ -5212,10 +5384,10 @@ var ExplorationStore = class {
     this.closing = false;
     this.original = null;
     this.live = null;
-    this.activePreset = provider?.activeId ?? import_TweakStore4.TweakStore.getActivePresetId(panelId);
+    this.activePreset = provider?.activeId ?? import_TweakStore6.TweakStore.getActivePresetId(panelId);
     this.bindButtons();
-    this.unsubscribePanel = import_TweakStore4.TweakStore.subscribeGlobal(() => {
-      if (!import_TweakStore4.TweakStore.getPanel(panelId)) {
+    this.unsubscribePanel = import_TweakStore6.TweakStore.subscribeGlobal(() => {
+      if (!import_TweakStore6.TweakStore.getPanel(panelId)) {
         this.cancelSave();
         void this.close();
       } else this.refreshParameters();
@@ -5226,7 +5398,7 @@ var ExplorationStore = class {
       if (this.adapter && !["capture", "preview", "restore", "save"].every((k) => typeof this.adapter[k] === "function")) throw new Error("The host exploration adapter is incomplete.");
       this.original = await this.capture();
       this.live = cloneDNA(this.original);
-      import_TweakStore4.TweakStore.beginPresetPreview(panelId);
+      import_TweakStore6.TweakStore.beginPresetPreview(panelId);
       const s = this.state;
       if (!s.trees.some((t) => t.generations.some((g) => g.children.length))) {
         const seeds = [child(cloneDNA(this.original)), ...Array.from({ length: 31 }, () => child(seedDNA(this.original, s.parameters, { ...s.settings, seedMode: "current", spread: 0.2 })))];
@@ -5256,7 +5428,7 @@ var ExplorationStore = class {
     await this.tail;
     try {
       if (this.original && this.adapter) await this.adapter.restore(cloneDNA(this.original), this.activePreset);
-      import_TweakStore4.TweakStore.endPresetPreview(s.panelId);
+      import_TweakStore6.TweakStore.endPresetPreview(s.panelId);
     } catch (e) {
       s.busy = false;
       s.error = `Could not restore the original sound: ${e instanceof Error ? e.message : e}. Press Back to retry.`;
@@ -5296,7 +5468,7 @@ var ExplorationStore = class {
   }
   refreshParameters() {
     if (!this.state) return;
-    const fresh = cloneDNA(this.adapter?.parameters ?? collectGenes(import_TweakStore4.TweakStore.getPanel(this.state.panelId)?.controls ?? []));
+    const fresh = cloneDNA(this.adapter?.parameters ?? collectGenes(import_TweakStore6.TweakStore.getPanel(this.state.panelId)?.controls ?? []));
     for (const p of fresh) {
       const old = this.state.parameters.find((q) => q.id === p.id && q.kind === p.kind);
       if (old) {
@@ -5473,15 +5645,15 @@ var ExplorationStore = class {
   }
   getPresetItems() {
     if (!this.state) return [];
-    const provider = import_TweakStore4.TweakStore.getPresetProvider(this.state.panelId);
-    return provider ? this.adapter?.readPreset ? provider.presets.map((p) => ({ id: p.id, label: p.label })) : [] : import_TweakStore4.TweakStore.getPresets(this.state.panelId).map((p) => ({ id: p.id, label: p.name }));
+    const provider = import_TweakStore6.TweakStore.getPresetProvider(this.state.panelId);
+    return provider ? this.adapter?.readPreset ? provider.presets.map((p) => ({ id: p.id, label: p.label })) : [] : import_TweakStore6.TweakStore.getPresets(this.state.panelId).map((p) => ({ id: p.id, label: p.name }));
   }
   async addPresetSeed(id) {
     if (!this.ready()) return;
     await this.run(async () => {
       const s = this.state, seeds = this.currentTree().generations[0].children;
       if (seeds.length >= 32) throw new Error("This seed generation is full.");
-      const dna = this.adapter ? await this.adapter.readPreset?.(id) : import_TweakStore4.TweakStore.getPresets(s.panelId).find((p) => p.id === id)?.values;
+      const dna = this.adapter ? await this.adapter.readPreset?.(id) : import_TweakStore6.TweakStore.getPresets(s.panelId).find((p) => p.id === id)?.values;
       if (!dna) throw new Error("This preset is unavailable.");
       this.checkpoint();
       seeds.push(child(reconcileDNA(dna, await this.capture(), s.parameters)));
@@ -5548,7 +5720,7 @@ var ExplorationStore = class {
     await this.run(async () => {
       const s = this.state, values = await this.capture(), label = name.trim() || "Exploration preset";
       if (this.adapter) await this.adapter.save(label, values);
-      else import_TweakStore4.TweakStore.savePresetSnapshot(s.panelId, label, values);
+      else import_TweakStore6.TweakStore.savePresetSnapshot(s.panelId, label, values);
       s.saving = false;
       s.message = `Saved \u201C${label}\u201D. Keep exploring.`;
     });
@@ -5896,7 +6068,7 @@ function presetFlowerSvg(values) {
 }
 
 // src/components/PresetExploration.tsx
-var import_TweakStore5 = require("tweakers/store");
+var import_TweakStore7 = require("tweakers/store");
 var import_jsx_runtime5 = require("react/jsx-runtime");
 var SHELL_MOTION = { duration: 0.15, ease: [0.2, 0, 0, 1] };
 var clamp7 = (value) => Math.max(0, Math.min(1, value));
@@ -5952,7 +6124,7 @@ function PresetExplorationSlots() {
   const state4 = PresetExplorationStore.getState();
   if (!state4) return null;
   const slots = PresetExplorationStore.slots();
-  const unsupported = !!import_TweakStore5.TweakStore.getPresetProvider(state4.panelId) && !import_TweakStore5.TweakStore.getPresetProvider(state4.panelId)?.exploration;
+  const unsupported = !!import_TweakStore7.TweakStore.getPresetProvider(state4.panelId) && !import_TweakStore7.TweakStore.getPresetProvider(state4.panelId)?.exploration;
   return /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "tweakers-move-grid tweakers-exploration-dock", role: "group", "aria-label": "Eight Move encoder properties", children: /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "tweakers-move-dials", children: Array.from({ length: 8 }, (_, index) => {
     const slot = slots[index];
     if (!slot) return /* @__PURE__ */ (0, import_jsx_runtime5.jsx)("div", { className: "tweakers-move-dial", "data-empty": true, "aria-hidden": "true" }, index);
@@ -5991,7 +6163,7 @@ function ExplorationContent({ state: state4, anchorRef }) {
     if (state4.saving) setName("");
   }, [state4.saving]);
   const [parameterGroup, setParameterGroup] = (0, import_react5.useState)("*");
-  const provider = import_TweakStore5.TweakStore.getPresetProvider(state4.panelId);
+  const provider = import_TweakStore7.TweakStore.getPresetProvider(state4.panelId);
   const unsupported = !!provider && !provider.exploration;
   const blocked = state4.busy || unsupported;
   const tree2 = state4.trees.find((item) => item.id === state4.treeId);
@@ -6400,7 +6572,7 @@ function moveFloatSitsInside(panelTop, boxHeight, gap = MOVE_FLOAT_GAP) {
 }
 
 // src/components/MovePanel.tsx
-var import_TweakStore22 = require("tweakers/store");
+var import_TweakStore23 = require("tweakers/store");
 var import_ModulationStore4 = require("tweakers/modulation-store");
 
 // src/curve-composer-core.ts
@@ -8584,7 +8756,7 @@ function WaveformVisualization({
 }
 
 // src/move-surface-store.ts
-var import_TweakStore6 = require("tweakers/store");
+var import_TweakStore8 = require("tweakers/store");
 var moveScreenRowLabel = (row2) => typeof row2 === "string" ? row2 : row2.label;
 var moveScreenRowSearchText = (row2) => typeof row2 === "string" || !row2.keywords ? moveScreenRowLabel(row2) : `${row2.label} ${row2.keywords}`;
 var moveScreenChecked = (rows) => rows.flatMap((row2, i) => typeof row2 !== "string" && row2.checked ? [i] : []);
@@ -8604,7 +8776,7 @@ function patch(key, value) {
   state = { ...state, [key]: value };
   emit();
 }
-var used = () => import_TweakStore6.TweakStore.noteMoveKitUse("surface");
+var used = () => import_TweakStore8.TweakStore.noteMoveKitUse("surface");
 var validPads = (pads) => pads.filter((p) => p.x >= 0 && p.x < 8 && (p.y === 0 || p.y === 1));
 function patchPadRows(rows, pads, label) {
   const nextPads = validPads(pads);
@@ -8722,7 +8894,7 @@ var MoveSurfaceStore = {
 };
 
 // src/move-volume.ts
-var import_TweakStore7 = require("tweakers/store");
+var import_TweakStore9 = require("tweakers/store");
 var MoveVolumeDisplayClass = class {
   constructor() {
     this.state = null;
@@ -8732,7 +8904,7 @@ var MoveVolumeDisplayClass = class {
   /** Show the pill with this readout — replaces any previous one. Under a
    *  claim it waits, and shows once the claims let go. */
   set(state4) {
-    import_TweakStore7.TweakStore.noteMoveKitUse("volume");
+    import_TweakStore9.TweakStore.noteMoveKitUse("volume");
     this.state = state4;
     this.notify();
   }
@@ -8752,7 +8924,7 @@ var MoveVolumeDisplayClass = class {
    * whose readout is no longer `get()` must leave the knob's turns alone.
    */
   claim(readout2) {
-    import_TweakStore7.TweakStore.noteMoveKitUse("volume");
+    import_TweakStore9.TweakStore.noteMoveKitUse("volume");
     this.claims.push(readout2);
     this.notify();
     let released = false;
@@ -8780,7 +8952,7 @@ var MoveVolumeDisplayClass = class {
 var MoveVolumeDisplay = new MoveVolumeDisplayClass();
 
 // src/move-waveform.ts
-var import_TweakStore8 = require("tweakers/store");
+var import_TweakStore10 = require("tweakers/store");
 var MOVE_WAVE_FRAME = 12;
 var MOVE_WAVE_MAX_WIDTH = 1200;
 var MOVE_WAVE_MAX_HEIGHT = 176;
@@ -8891,7 +9063,7 @@ var MoveWaveformStoreClass = class {
    * off screen for a moment — and its saved values win over the seed.
    */
   register(style) {
-    import_TweakStore8.TweakStore.noteMoveKitUse("waveform");
+    import_TweakStore10.TweakStore.noteMoveKitUse("waveform");
     this.claims += 1;
     if (this.claims === 1) this.lastScrubAt = 0;
     this.ensureSettings(style);
@@ -8963,9 +9135,9 @@ var MoveWaveformStoreClass = class {
    * seeds it if it gets there first, and saved values win over any seed.
    */
   ensureSettings(style) {
-    if (import_TweakStore8.TweakStore.getPanel(MOVE_WAVEFORM_PANEL)) return;
+    if (import_TweakStore10.TweakStore.getPanel(MOVE_WAVEFORM_PANEL)) return;
     const seed = { ...defaultStyle(), ...style };
-    import_TweakStore8.TweakStore.registerPanel(
+    import_TweakStore10.TweakStore.registerPanel(
       MOVE_WAVEFORM_PANEL,
       "Waveform",
       {
@@ -8993,8 +9165,8 @@ var MoveWaveformStoreClass = class {
       void 0,
       { kind: "kit", persist: true }
     );
-    const saved = import_TweakStore8.TweakStore.getValues(MOVE_WAVEFORM_PANEL);
-    if (typeof saved.resolution !== "number") import_TweakStore8.TweakStore.updateValue(MOVE_WAVEFORM_PANEL, "resolution", clampPixelSize(seed.pixelSize));
+    const saved = import_TweakStore10.TweakStore.getValues(MOVE_WAVEFORM_PANEL);
+    if (typeof saved.resolution !== "number") import_TweakStore10.TweakStore.updateValue(MOVE_WAVEFORM_PANEL, "resolution", clampPixelSize(seed.pixelSize));
   }
   /**
    * The zoom the display is really at: striped bars stretch the wave, so
@@ -9007,14 +9179,14 @@ var MoveWaveformStoreClass = class {
   }
   /** The look the settings page holds right now (the defaults until one is registered). */
   getStyle() {
-    return styleFromValues(import_TweakStore8.TweakStore.getPanel(MOVE_WAVEFORM_PANEL) && import_TweakStore8.TweakStore.getValues(MOVE_WAVEFORM_PANEL), defaultStyle());
+    return styleFromValues(import_TweakStore10.TweakStore.getPanel(MOVE_WAVEFORM_PANEL) && import_TweakStore10.TweakStore.getValues(MOVE_WAVEFORM_PANEL), defaultStyle());
   }
   /** The settings page's values, a stable snapshot per change — for `useSyncExternalStore`. */
   getStyleSnapshot() {
-    return import_TweakStore8.TweakStore.getValues(MOVE_WAVEFORM_PANEL);
+    return import_TweakStore10.TweakStore.getValues(MOVE_WAVEFORM_PANEL);
   }
   subscribeStyle(fn) {
-    return import_TweakStore8.TweakStore.subscribe(MOVE_WAVEFORM_PANEL, fn);
+    return import_TweakStore10.TweakStore.subscribe(MOVE_WAVEFORM_PANEL, fn);
   }
   /**
    * Editor mode — the floating waveform is up and owns the whole surface:
@@ -10182,7 +10354,7 @@ function isIdentityTransfer(points) {
 }
 
 // src/shortcut-utils.ts
-var import_TweakStore9 = require("tweakers/store");
+var import_TweakStore11 = require("tweakers/store");
 function fineDragValue(opts) {
   const { startValue, startPos, pos, extentPx, min, max, factor = 0.1 } = opts;
   const delta = (pos - startPos) / (extentPx || 1) * (max - min) * factor;
@@ -10516,160 +10688,8 @@ function moveShapePath(points) {
   return points.map((v, i) => `${i ? "L" : "M"} ${(i / (points.length - 1) * 100).toFixed(2)} ${((1 - v) * 100).toFixed(2)}`).join(" ");
 }
 
-// src/move-steer-core.ts
-var MOVE_STEER_GAIN_X = 2;
-var MOVE_STEER_GAIN_Y = 1.5;
-var MOVE_STEER_MARGIN = 10;
-var MOVE_STEER_SLOW_MARGIN = 50;
-var MOVE_STEER_FULL_SPEED = 0.6;
-function moveSteerMargin(speed) {
-  const t = Math.min(1, Math.max(0, speed / MOVE_STEER_FULL_SPEED));
-  return MOVE_STEER_MARGIN + MOVE_STEER_SLOW_MARGIN * (1 - t * t * (3 - 2 * t));
-}
-var MOVE_STEER_EXIT_SLACK = 48;
-var MOVE_STEER_EXIT_SPEED = 0.5;
-function moveSteerLeaves(depth, v) {
-  if (depth <= 0) return false;
-  const speed = Math.hypot(v.x, v.y);
-  const up = Math.max(0, -v.y);
-  const straight = speed ? up / speed : 0;
-  const quick = Math.min(1, up / MOVE_STEER_EXIT_SPEED);
-  const intent = straight * straight * (0.5 + 0.5 * quick);
-  return depth >= MOVE_STEER_EXIT_SLACK * (1 - intent);
-}
-var MOVE_STEER_REACH_MIN = 34;
-var MOVE_STEER_REACH_MAX = 70;
-var MOVE_STEER_REST_MS = 110;
-var mid = (b) => ({ x: (b.left + b.right) / 2, y: (b.top + b.bottom) / 2 });
-function moveSteerReach(b) {
-  const clamp14 = (v) => Math.min(MOVE_STEER_REACH_MAX, Math.max(MOVE_STEER_REACH_MIN, v));
-  return { x: clamp14((b.right - b.left) / 2 + MOVE_STEER_MARGIN), y: clamp14((b.bottom - b.top) / 2 + MOVE_STEER_MARGIN) };
-}
-function moveSteerMap(hand, from, gain, at2) {
-  return { x: hand.x + (at2.x - from.x) * gain.x, y: hand.y + (at2.y - from.y) * gain.y };
-}
-function moveSteerSettle(from, boxes, at2, margin) {
-  let here = from;
-  let landed = null;
-  for (let step = 0; step < 8; step++) {
-    const mx = Math.min(margin, (here.right - here.left) / 2 + MOVE_STEER_MARGIN);
-    const my = Math.min(margin, (here.bottom - here.top) / 2 + MOVE_STEER_MARGIN);
-    if (at2.x >= here.left - mx && at2.x <= here.right + mx && at2.y >= here.top - my && at2.y <= here.bottom + my) break;
-    const ox = at2.x < here.left ? at2.x - here.left : at2.x > here.right ? at2.x - here.right : 0;
-    const oy = at2.y < here.top ? at2.y - here.top : at2.y > here.bottom ? at2.y - here.bottom : 0;
-    const dir = Math.abs(ox) / mx >= Math.abs(oy) / my ? { x: Math.sign(ox), y: 0 } : { x: 0, y: Math.sign(oy) };
-    const next = moveSteerNext(here, boxes, at2, dir);
-    if (next < 0 || boxes[next] === from) break;
-    landed = { index: next, dir };
-    here = boxes[next];
-  }
-  return landed;
-}
-function moveSteerNext(from, boxes, at2, dir) {
-  const c = mid(from);
-  let best = -1;
-  let score = Infinity;
-  boxes.forEach((b, i) => {
-    if (b === from) return;
-    const m = mid(b);
-    let gap, across;
-    const along = dir.x ? (m.x - c.x) * dir.x : (m.y - c.y) * dir.y;
-    const aside = dir.x ? Math.abs(m.y - c.y) : Math.abs(m.x - c.x);
-    if (along <= 1 || along < aside * (dir.x ? MOVE_STEER_CONE_ACROSS : MOVE_STEER_CONE_DOWN)) return;
-    if (dir.x) {
-      gap = dir.x > 0 ? Math.max(0, b.left - from.right) : Math.max(0, from.left - b.right);
-      across = at2.y < b.top ? b.top - at2.y : at2.y > b.bottom ? at2.y - b.bottom : 0;
-    } else {
-      gap = dir.y > 0 ? Math.max(0, b.top - from.bottom) : Math.max(0, from.top - b.bottom);
-      across = at2.x < b.left ? b.left - at2.x : at2.x > b.right ? at2.x - b.right : 0;
-    }
-    const s = gap + across * 2;
-    if (s < score) {
-      score = s;
-      best = i;
-    }
-  });
-  return best;
-}
-function moveSteerPose(u, size) {
-  const ax = Math.tanh(u.x * 1.1);
-  const ay = Math.tanh(u.y * 1.1);
-  const sx = 1 + 0.045 * Math.abs(ax) - 0.02 * Math.abs(ay);
-  const sy = 1 + 0.045 * Math.abs(ay) - 0.02 * Math.abs(ax);
-  return {
-    tx: ax * 3 + Math.sign(ax) * (size.x * (sx - 1)) / 2,
-    ty: ay * 3 + Math.sign(ay) * (size.y * (sy - 1)) / 2,
-    sx,
-    sy
-  };
-}
-var STIFFNESS = 520;
-var DAMPING = 2 * 0.62 * Math.sqrt(STIFFNESS);
-function moveSteerSpring(s, to, dt) {
-  const step = Math.min(dt, 1 / 30);
-  s.vx += (STIFFNESS * (to.x - s.x) - DAMPING * s.vx) * step;
-  s.vy += (STIFFNESS * (to.y - s.y) - DAMPING * s.vy) * step;
-  s.x += s.vx * step;
-  s.y += s.vy * step;
-  return Math.abs(to.x - s.x) + Math.abs(to.y - s.y) > 2e-3 || Math.abs(s.vx) + Math.abs(s.vy) > 0.02;
-}
-var MOVE_STEER_CONE_ACROSS = 0.5;
-var MOVE_STEER_CONE_DOWN = 0.25;
-var MOVE_STEER_KNOCK = 14;
-
 // src/move-steer.ts
-var import_TweakStore11 = require("tweakers/store");
-
-// src/move-track-labels.ts
-var import_TweakStore10 = require("tweakers/store");
-var MOVE_PANEL_SETTINGS = "move-panel";
-var MOVE_TRACK_LABEL_STYLES = ["name", "both", "icon"];
-var STYLE_LABELS = {
-  name: "Name",
-  both: "Icon + name",
-  icon: "Icon"
-};
-function moveTrackIcon(panel) {
-  return panel.icon && LUCIDE_ICONS[panel.icon] ? panel.icon : void 0;
-}
-function moveTrackLabelStyle(values, hasIcons) {
-  if (!hasIcons) return "name";
-  return MOVE_TRACK_LABEL_STYLES.find((s) => s === values?.trackLabels) ?? "both";
-}
-var MoveTrackLabels = {
-  /**
-   * Put the Panel page in the settings room. Idempotent; the panel calls it
-   * on mount, so the room holds its pages from the start.
-   */
-  ensureSettings() {
-    if (import_TweakStore10.TweakStore.getPanel(MOVE_PANEL_SETTINGS)) return;
-    import_TweakStore10.TweakStore.registerPanel(
-      MOVE_PANEL_SETTINGS,
-      "Panel",
-      {
-        trackLabels: {
-          type: "select",
-          default: "both",
-          options: MOVE_TRACK_LABEL_STYLES.map((s) => ({ value: s, label: STYLE_LABELS[s] }))
-        },
-        // The steering hand's pace (move-steer): pointer pixels to hand
-        // pixels inside the panel, across and up and down apart.
-        // The steering hand holds the pointer over the controls (on), or
-        // the pointer stays free and the control under it is the one in
-        // the hand (off) — ⌘, two fingers and the keys turn it either way.
-        steerHand: { type: "toggle", default: true },
-        handSpeedX: { type: "slider", default: MOVE_STEER_GAIN_X, min: 0.5, max: 5, step: 0.1, display: "value" },
-        handSpeedY: { type: "slider", default: MOVE_STEER_GAIN_Y, min: 0.5, max: 5, step: 0.1, display: "value" }
-      },
-      void 0,
-      { kind: "kit", persist: true, labels: { trackLabels: "Track labels", steerHand: "Panel hand", handSpeedX: "Hand speed \u2190\u2192", handSpeedY: "Hand speed \u2191\u2193" } }
-    );
-  },
-  /** Grey the choice out while no page on the row carries a picture. */
-  setIconsAvailable(available) {
-    import_TweakStore10.TweakStore.setDisabled(MOVE_PANEL_SETTINGS, "trackLabels", !available);
-  }
-};
+var import_TweakStore12 = require("tweakers/store");
 
 // src/sounds/steer-lock.ts
 var MOVE_STEER_LOCK_WAV = "data:audio/wav;base64,UklGRhRGAABXQVZFZm10IBAAAAABAAIAgLsAAADuAgAEABAAZGF0YfBFAAD4+rAGV/sEBm37ZwUn+5EFS/s0BYX7iAXW+78F2PvCBe77GQbg+2YGE/zMBe372AXs+7MFvfu/BdH7kgXr+4cFH/zwBR78xQU0/BoGMPwvBs37CwYm/N4FwfssBvX7QwZG/HwGh/yiBo/8jQY2/EwGcvzeBTf8EAYq/OAFZPwXBl38NQaZ/C8GCv1yBrb8Sgaq/EkGufw8Bor8KgaP/FQGT/wdBof88QVx/F8GXPxCBsH8NQYs/FoGNPzfBaH88AUI/MgFJPykBTv8+QVA/McFv/wFBoT8vAU5/IEFOvyoBV38gAVv/OUFTPynBav84QXl/A8G0vzIBdn8KQbJ/LoFs/yUBXL8wAVY/JsFW/y6BYr8vwWV/LoFk/ylBbL8kgWs/HIF3fxRBfr8TQXY/FkF8PxNBS39XgVF/aoFOv2PBUn9gAVu/XQFQP1eBVv9wwVm/Q8Gmv33Bbr99QWG/QsGgP3vBSz9qAUo/WMF+Px3BTD9agUv/YsFIv2DBWT9QAVD/YsFn/1iBXD9QgUz/RAFLP3nBDH9DQU4/eEEZf0JBYH9IwWh/f4Ex/3YBGD9ugRW/akEQv2hBD79gwRW/akEOf2hBEb9OwSW/XkETP1nBDj9RgR9/TMEaf0nBLn9dQSh/WoEuv2kBL/9xQSc/YkEnv10BKL9RwSo/egDhv3zA9H9NQTH/WIEwv2KBLP9iwSa/YYEkf1IBFP9aQQ1/UsE8/wrBBP9IgRG/fIDGf1PBE/9IASM/UwEQP03BCf92QPp/AUE7vynA1/9BAQp/TgE+vwrBAb9jQQO/XcE7/xXBLn8OQSl/EQEi/z3A3H8rwOs/P8D4PwGBJv80AOc/K8DiPybA0z8WgNw/CwDmPz8As/86AIH/UsDD/2BAyz9kAM7/ZMDIP2OAwb9lQPi/G4D+/xmAxH9lwMe/ZUDX/2iAwz9yQPC/IYD+/xFA778KQOW/FADtPwIA+b8xwIE/XgDFv1mA2v9UgNk/XEDlv1uA7T9fAOt/U0DzP1qA7T9NwPv/Y0D/P2PAwn+WQPj/YgDmf0sA5L9aQM3/SEDL/2pAij9tQIR/bkCXP3yAnv9HANp/RQDUv0IA0T9AQM4/bcCQf3ZAlP9AQOk/TIDJ/5TAwf+iwOy/bMD/v1JAwv+eAPe/UUDv/3RApL94gK9/fYCp/3YAr39/QKt/QsDgP0WA2r9SgP5/NcCHv3FAjr9jQIl/ZwCXP3VAmj9qwIn/cgCY/3MAk/9kQII/WMCRf3DAg39ZAIZ/YsCVv3dAmr9xwJf/RkDRP3wAjb9QwMX/f8C7/z/Atj8NQPe/NYC2fzbAvD81wLv/C8D8fwdAwr94wLa/AsDqPwkA8z87ALS/L4C8fzQAif98QIh/R4DLf0kAzb9AAMO/dECCP2qAjr9zgIj/SUD1fy5AsT8AgPP/CUDtfzKAqb8ygKh/JMCo/zVAp38bwIu/VoCAv3LAn38owLy/McCzvwAA5b8SQLn/FICuPwjAp78qAHQ/BIC+/ufAOz8YwGa/GkCHvxkATf9UQIa/LEBu/xsARL9SQKK/IcBpPxKAfP8AQKK/N4B3/y1Afn87gG//J8BBP3QAWH8cwFA/ZgBavyhAcv8wgGC/I8BqvzXAbr8lwGM/FMB3vz1AUz83gAN/YkB+fulAAX9ogFp+4MApvxTAQ/8kwFu/BoBjPzgAX/7ZAD8/BwCDvue/3b9vAKN+tT+CP6nAlP6///l/YcBr/qfAT/9PP7P+ZoFne/j51gj1iJH6f8W9dcKvmkrDxa/8o4o/eoL5U4Snf1D7lwBrPcYAgoSwyA37bLi4/JH4d4NxDPZ+fAICfP02aD7of5KCqwda/aICqLwLt+FC+L47v/fL4Hsp/XwATTZrwoPGtr0+xpG9jbu6fzJ5OgH+Rfc+Ogaie+a5VsFRO7WAEwbK/JnCpb5Y+lRCwP/UfOJDw70rAEtCPzxs/qWAsT8bA2S9Mn5q/609eQHZw6c8LEDqvgJ71EE1wZf/msIj/PB/an4dfbrBfAAtfvXCX72v/vZ+5f9ygEA/7X8zAIK+YIEv/7S/pT9efue/iQC2PjRB9X5XvtHArP4I/4qCAb3dATM+p33ngLvABH8RAKO+K8B2/0e/3EAu/x2/CAJP/k4AGL/Wvuz/ZED8ftqA6P8XwHi+//8qP/zBI74awHt+u34EANtB775vAQs+Ib4k/8QAAz+UwZK+sH/7P06/pn89QGc/I8A6/9RA6/72gB5+0v8qf7vA0z+lAUH+1z8Vfx7/ob9pATE/VkDifsM/576mvq+/yIEXPzUBvT7PfzF/Wf9iP1IBJn93wM2/bX+Of4QAdn8hgSX/s0BZv1/AKv8LQHx/WUCF/4/A5f9LgDA+18AZv6zA4f9WAF3/Br/jf0FAub80gM5/gYAYP6AALn8jQIW/ksCgf+mAlb8AgCq/h0Cn/6hAxr8Fv/8/nsB2fz2AuP8TACn/VwCXv28AEH9HQFK/DADA/7YANn+BwLB/Q4EbvvaAN/+GABm/7oFFvzPApL9NP9L/soCKv7WA9b8WwGx/Y4Af/5+A5r9CQKi/XkAkv36AeL+AAJ6/tgBf/0/AXT+MAHm/icDgv/fARwAif/z/zYABgDk//3/CgAAAAAAAQD4//3/DQADAO//+/8SAAQA7f/7/xEAAwDw//z/DQACAPX//v8HAAAA/P///wAA//8CAAEA+//+/wYAAQD4//3/CAACAPf//f8IAAEA+P/+/wUAAQD7////AgAAAP7/AAD/////AgAAAPz//v8EAAEA+//+/wQAAQD7//7/BAAAAPz///8CAAAA/v///wAA//8AAAAA/////wEAAAD9////AgAAAP3///8CAAAA/f///wIAAAD+////AQAAAP////8AAP//AAAAAP////8BAAAA/v///wEAAAD+////AQAAAP7///8BAAAA/////wAAAAD//wAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAP//AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD//wAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAP////8AAP////8AAAAA/////wAAAAD//wAAAAD/////AAAAAP////8AAAAA////////AAAAAAAA/////wAAAAD/////AAAAAP////8AAAAA/////wAAAAD/////AAAAAP////8AAP//AAAAAAAA//8AAAAAAAD//wAAAAAAAP//AAAAAAAA//8AAAAAAAD//wAAAAAAAAAAAAD//wAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=";
@@ -10792,9 +10812,9 @@ function attachMoveSteer(root) {
     const panel = root();
     return (panel?.querySelector(".tweakers-move-controls") ?? panel)?.getBoundingClientRect().top ?? Infinity;
   };
-  const free = () => import_TweakStore11.TweakStore.getValues(MOVE_PANEL_SETTINGS)?.steerHand === false;
+  const free = () => import_TweakStore12.TweakStore.getValues(MOVE_PANEL_SETTINGS)?.steerHand === false;
   const pace = () => {
-    const v = import_TweakStore11.TweakStore.getValues(MOVE_PANEL_SETTINGS);
+    const v = import_TweakStore12.TweakStore.getValues(MOVE_PANEL_SETTINGS);
     const gain = (x, fallback) => typeof x === "number" && x > 0 ? x : fallback;
     return { x: gain(v?.handSpeedX, MOVE_STEER_GAIN_X), y: gain(v?.handSpeedY, MOVE_STEER_GAIN_Y) };
   };
@@ -11536,17 +11556,17 @@ function MoveMenuButton({ theme, open: open2, label }) {
 // src/components/MoveHandToggle.tsx
 var import_react12 = require("react");
 var import_react_dom3 = require("react-dom");
-var import_TweakStore12 = require("tweakers/store");
+var import_TweakStore13 = require("tweakers/store");
 var import_jsx_runtime11 = require("react/jsx-runtime");
 function MoveHandToggle({ theme }) {
   const on = (0, import_react12.useSyncExternalStore)(
-    (0, import_react12.useCallback)((cb) => import_TweakStore12.TweakStore.subscribe(MOVE_PANEL_SETTINGS, cb), []),
-    () => import_TweakStore12.TweakStore.getValues(MOVE_PANEL_SETTINGS)?.steerHand !== false,
+    (0, import_react12.useCallback)((cb) => import_TweakStore13.TweakStore.subscribe(MOVE_PANEL_SETTINGS, cb), []),
+    () => import_TweakStore13.TweakStore.getValues(MOVE_PANEL_SETTINGS)?.steerHand !== false,
     () => true
   );
   const [mounted, setMounted] = (0, import_react12.useState)(false);
   (0, import_react12.useEffect)(() => setMounted(true), []);
-  if (!mounted || typeof document === "undefined" || !import_TweakStore12.TweakStore.getPanel(MOVE_PANEL_SETTINGS)) return null;
+  if (!mounted || typeof document === "undefined" || !import_TweakStore13.TweakStore.getPanel(MOVE_PANEL_SETTINGS)) return null;
   return (0, import_react_dom3.createPortal)(
     /* @__PURE__ */ (0, import_jsx_runtime11.jsx)("div", { className: "tweakers-root tweakers-move-surface tweakers-move-hand-toggle", "data-theme": theme, children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(
       "button",
@@ -11557,7 +11577,7 @@ function MoveHandToggle({ theme }) {
         "aria-pressed": on,
         title: on ? "Panel hand: the pointer holds the controls" : "Panel hand: off \u2014 the pointer moves freely",
         "data-open": on || void 0,
-        onClick: () => import_TweakStore12.TweakStore.updateValue(MOVE_PANEL_SETTINGS, "steerHand", !on),
+        onClick: () => import_TweakStore13.TweakStore.updateValue(MOVE_PANEL_SETTINGS, "steerHand", !on),
         children: /* @__PURE__ */ (0, import_jsx_runtime11.jsx)(MoveSlotGlyph, { name: "mouse-pointer-2", className: "tweakers-move-menu-icon" })
       }
     ) }),
@@ -11570,7 +11590,7 @@ var import_react13 = require("react");
 var import_react_dom4 = require("react-dom");
 
 // src/move-agent.ts
-var import_TweakStore13 = require("tweakers/store");
+var import_TweakStore14 = require("tweakers/store");
 
 // src/move-agent-perception.ts
 var readLive = (live) => typeof live === "function" ? live() : live;
@@ -11668,9 +11688,9 @@ var SEP = "::";
 var flat3 = (controls) => controls.flatMap((c) => c.type === "folder" ? flat3(c.children ?? []) : [c]);
 var component = (value, key) => key && value && typeof value === "object" ? value[key] : value;
 function entries(only) {
-  return import_TweakStore13.TweakStore.selectPanels(only).flatMap((panel) => {
+  return import_TweakStore14.TweakStore.selectPanels(only).flatMap((panel) => {
     const metas = new Map(flat3(panel.controls).map((c) => [c.path, c]));
-    const open2 = (path) => !import_TweakStore13.TweakStore.isDisabled(panel.id, path);
+    const open2 = (path) => !import_TweakStore14.TweakStore.isDisabled(panel.id, path);
     const genes = collectGenes(panel.controls).filter((g) => open2(g.path)).map((g) => {
       const meta = metas.get(g.path);
       return { panelId: panel.id, path: g.path, component: g.component, gene: g, control: {
@@ -11716,7 +11736,7 @@ function glideStep(now) {
   glideFrame = null;
   for (const [key, g] of glides) {
     const [panelId, path, comp] = key.split("\0");
-    const live = import_TweakStore13.TweakStore.getPanel(panelId)?.values[path];
+    const live = import_TweakStore14.TweakStore.getPanel(panelId)?.values[path];
     const seen = component(live, comp || void 0);
     if (live === void 0 || seen !== g.wrote) {
       glides.delete(key);
@@ -11725,7 +11745,7 @@ function glideStep(now) {
     const t = Math.min(1, (now - g.t0) / MOVE_AGENT_GLIDE_MS);
     const value = t >= 1 ? g.to : g.from + (g.to - g.from) * easeOut(t);
     g.wrote = value;
-    import_TweakStore13.TweakStore.updateValues(panelId, { [path]: comp ? { ...live, [comp]: value } : value });
+    import_TweakStore14.TweakStore.updateValues(panelId, { [path]: comp ? { ...live, [comp]: value } : value });
     if (t >= 1) glides.delete(key);
   }
   if (glides.size) glideFrame = requestAnimationFrame(glideStep);
@@ -11740,10 +11760,10 @@ var canGlide = () => typeof requestAnimationFrame === "function" && typeof perfo
 function landValues(updates, glideNumbers) {
   for (const [panelId, values] of Object.entries(updates)) {
     if (!glideNumbers || !canGlide()) {
-      import_TweakStore13.TweakStore.updateValues(panelId, values);
+      import_TweakStore14.TweakStore.updateValues(panelId, values);
       continue;
     }
-    const live = import_TweakStore13.TweakStore.getValues(panelId);
+    const live = import_TweakStore14.TweakStore.getValues(panelId);
     const now = {};
     for (const [path, target] of Object.entries(values)) {
       const from = live[path];
@@ -11768,7 +11788,7 @@ function landValues(updates, glideNumbers) {
       }
       now[path] = target;
     }
-    if (Object.keys(now).length) import_TweakStore13.TweakStore.updateValues(panelId, now);
+    if (Object.keys(now).length) import_TweakStore14.TweakStore.updateValues(panelId, now);
   }
 }
 function applyAgentWrites(writes, only) {
@@ -11781,7 +11801,7 @@ function applyAgentWrites(writes, only) {
     const entry = byId.get(write2.id);
     const value = entry && fit(entry, write2.value);
     if (!entry || value === void 0) continue;
-    const live = import_TweakStore13.TweakStore.getValues(entry.panelId);
+    const live = import_TweakStore14.TweakStore.getValues(entry.panelId);
     const pending = updates[_a = entry.panelId] ?? (updates[_a] = {});
     const current = pending[entry.path] ?? live[entry.path];
     if (component(current, entry.component) === value) continue;
@@ -11857,7 +11877,7 @@ async function runAgentActions(calls, actions, resolve, context2 = { attachments
 }
 function restoreAgentWrites(before) {
   const live = {};
-  for (const [panelId, values] of Object.entries(before)) if (import_TweakStore13.TweakStore.getPanel(panelId)) live[panelId] = values;
+  for (const [panelId, values] of Object.entries(before)) if (import_TweakStore14.TweakStore.getPanel(panelId)) live[panelId] = values;
   landValues(live, true);
 }
 var READ_SIGNAL = "read_signal";
@@ -12110,7 +12130,7 @@ var MoveAgentStoreClass = class {
       const controls = describeAgentControls(this.options.panels);
       const actions = readLive(this.options.actions) ?? [];
       if (!controls.length && !actions.length) throw new Error("Nothing here to turn.");
-      const focus = this.focus && import_TweakStore13.TweakStore.getPanel(this.focus)?.name;
+      const focus = this.focus && import_TweakStore14.TweakStore.getPanel(this.focus)?.name;
       const signals = readLive(this.options.signals) ?? [], hostTools = readLive(this.options.tools) ?? [], editMap = this.options.editMap;
       const caps = signals.length || hostTools.length ? await this.capable(flight.signal) : null;
       const tools = caps ? [...signals.length ? [readSignalTool(signals, editMap)] : [], ...hostTools.filter((t) => t.id !== READ_SIGNAL)] : [];
@@ -12655,7 +12675,7 @@ function MoveMultibandDisplay({ panelId, bands, reading }) {
 
 // src/components/ModRing.tsx
 var import_react15 = require("react");
-var import_TweakStore14 = require("tweakers/store");
+var import_TweakStore15 = require("tweakers/store");
 var import_ModulationStore = require("tweakers/modulation-store");
 var import_jsx_runtime16 = require("react/jsx-runtime");
 var ringDash = (length, circumference) => `${length.toFixed(2)} ${Math.max(0, circumference - length).toFixed(2)}`;
@@ -12677,7 +12697,7 @@ function ModRing({
     };
     const bounds = import_ModulationStore.ModulationStore.getBounds(panelId, path);
     const span = bounds ? bounds.max - bounds.min : 0;
-    const base01 = () => span ? (Number(import_TweakStore14.TweakStore.getValue(panelId, path)) - bounds.min) / span : 0;
+    const base01 = () => span ? (Number(import_TweakStore15.TweakStore.getValue(panelId, path)) - bounds.min) / span : 0;
     if (!span) return;
     const still = typeof window !== "undefined" && window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
     if (still) {
@@ -12691,7 +12711,7 @@ function ModRing({
         else draw(b - a / 2, b + a / 2);
       };
       drawReach();
-      return import_TweakStore14.TweakStore.subscribe(panelId, drawReach);
+      return import_TweakStore15.TweakStore.subscribe(panelId, drawReach);
     }
     return import_ModulationStore.ModulationStore.subscribeFrames(() => {
       const b = base01();
@@ -12802,7 +12822,7 @@ function MoveModRing({ panelId, path, pad }) {
 }
 
 // src/move-color.ts
-var import_TweakStore15 = require("tweakers/store");
+var import_TweakStore16 = require("tweakers/store");
 
 // src/move-wheel.ts
 var MOVE_WHEEL_ROW_SLACK = 3;
@@ -13011,7 +13031,7 @@ var MoveColorStoreClass = class {
   /* ---- the gradient shape under a control, when it has one ---- */
   /** The control's gradient value, or null when it holds a plain colour. */
   gradient(panelId, path) {
-    const v = import_TweakStore15.TweakStore.getValue(panelId, path);
+    const v = import_TweakStore16.TweakStore.getValue(panelId, path);
     return v && typeof v === "object" && Array.isArray(v.stops) && v.stops.length >= 2 ? v : null;
   }
   /** How many stops the editor can hold — 0 for a plain colour. */
@@ -13035,13 +13055,13 @@ var MoveColorStoreClass = class {
    *  changes identity under the hand moving it — the ramp slot's own rule. */
   moveStop(panelId, path, index, position) {
     const g = this.gradient(panelId, path);
-    if (!g || import_TweakStore15.TweakStore.isDisabled(panelId, path) || !Number.isFinite(position)) return;
+    if (!g || import_TweakStore16.TweakStore.isDisabled(panelId, path) || !Number.isFinite(position)) return;
     if (index < 0 || index >= g.stops.length) return;
     const lo = index > 0 ? g.stops[index - 1].position : 0;
     const hi = index < g.stops.length - 1 ? g.stops[index + 1].position : 1;
     const next = Math.min(hi, Math.max(lo, position));
     if (next === g.stops[index].position) return;
-    import_TweakStore15.TweakStore.updateValue(panelId, path, {
+    import_TweakStore16.TweakStore.updateValue(panelId, path, {
       ...g,
       stops: g.stops.map((s, i) => i === index ? { ...s, position: next } : s)
     });
@@ -13060,7 +13080,7 @@ var MoveColorStoreClass = class {
   hexAt(panelId, path, stop) {
     const g = stop === null ? null : this.gradient(panelId, path);
     if (g && stop !== null) return String(g.stops[Math.min(stop, g.stops.length - 1)]?.color ?? "#ff0000ff");
-    return String(import_TweakStore15.TweakStore.getValue(panelId, path) ?? "#ff0000");
+    return String(import_TweakStore16.TweakStore.getValue(panelId, path) ?? "#ff0000");
   }
   /** The selected coordinate target: the stop the editor is on, when the
    *  control is a gradient; the control itself otherwise. */
@@ -13091,7 +13111,7 @@ var MoveColorStoreClass = class {
     this.updateStop(panelId, path, this.targetStop(panelId, path), patch2);
   }
   updateStop(panelId, path, stop, patch2) {
-    if (!import_TweakStore15.TweakStore.getPanel(panelId) || import_TweakStore15.TweakStore.isDisabled(panelId, path) || Object.values(patch2).some((n) => !Number.isFinite(n))) return;
+    if (!import_TweakStore16.TweakStore.getPanel(panelId) || import_TweakStore16.TweakStore.isDisabled(panelId, path) || Object.values(patch2).some((n) => !Number.isFinite(n))) return;
     const color = { ...this.readStop(panelId, path, stop), ...patch2 };
     color.h = hue(color.h);
     color.s = clamp9(color.s);
@@ -13104,8 +13124,8 @@ var MoveColorStoreClass = class {
     const current = this.hexAt(panelId, path, stop);
     const hex = formatHex(hslToRgb(painted), !!g || painted.a < 1 || current.length === 9 || current.length === 5);
     this.coordinates.set(JSON.stringify([panelId, path, stop]), { hex, color });
-    if (g && stop !== null) import_TweakStore15.TweakStore.updateValue(panelId, path, setStopColor(g, stop, hex));
-    else import_TweakStore15.TweakStore.updateValue(panelId, path, hex);
+    if (g && stop !== null) import_TweakStore16.TweakStore.updateValue(panelId, path, setStopColor(g, stop, hex));
+    else import_TweakStore16.TweakStore.updateValue(panelId, path, hex);
     this.notify();
   }
   setHue(h) {
@@ -13314,12 +13334,12 @@ var MoveSearchStore = new MoveSearchStoreClass();
 // src/components/MoveColor.tsx
 var import_react16 = require("react");
 var import_react_dom5 = require("react-dom");
-var import_TweakStore16 = require("tweakers/store");
+var import_TweakStore17 = require("tweakers/store");
 var import_jsx_runtime17 = require("react/jsx-runtime");
 function MoveColorSlot({ panelId, meta, active, open: open2, latched = false, className, style }) {
   const gesture = (0, import_react16.useRef)(null);
   const suppressClick = (0, import_react16.useRef)(false);
-  const disabled = import_TweakStore16.TweakStore.isDisabled(panelId, meta.path);
+  const disabled = import_TweakStore17.TweakStore.isDisabled(panelId, meta.path);
   const color = MoveColorStore.read(panelId, meta.path);
   return /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(
     "button",
@@ -13341,8 +13361,8 @@ function MoveColorSlot({ panelId, meta, active, open: open2, latched = false, cl
           suppressClick.current = false;
           return;
         }
-        const first = import_TweakStore16.TweakStore.getDefault(panelId, meta.path);
-        if (e.shiftKey && typeof first === "string") import_TweakStore16.TweakStore.updateValue(panelId, meta.path, first);
+        const first = import_TweakStore17.TweakStore.getDefault(panelId, meta.path);
+        if (e.shiftKey && typeof first === "string") import_TweakStore17.TweakStore.updateValue(panelId, meta.path, first);
         else MoveColorStore.toggle(panelId, meta.path);
       },
       onKeyDown: (e) => {
@@ -13389,7 +13409,7 @@ function MoveColorSlot({ panelId, meta, active, open: open2, latched = false, cl
       onLostPointerCapture: () => {
         gesture.current = null;
       },
-      children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveSlotColorBody, { label: meta.label, color: String(import_TweakStore16.TweakStore.getValue(panelId, meta.path)) })
+      children: /* @__PURE__ */ (0, import_jsx_runtime17.jsx)(MoveSlotColorBody, { label: meta.label, color: String(import_TweakStore17.TweakStore.getValue(panelId, meta.path)) })
     }
   );
 }
@@ -13551,7 +13571,7 @@ function MoveColorDisplay({ panelId, meta, anchor, theme }) {
   const display = (0, import_react16.useRef)(null);
   const [position, setPosition] = (0, import_react16.useState)({ left: 0, top: 0 });
   const color = MoveColorStore.read(panelId, meta.path);
-  const disabled = import_TweakStore16.TweakStore.isDisabled(panelId, meta.path);
+  const disabled = import_TweakStore17.TweakStore.isDisabled(panelId, meta.path);
   const close = () => {
     if (display.current?.contains(document.activeElement)) {
       anchor.current?.querySelector('[data-kind][aria-expanded="true"]')?.focus();
@@ -13709,7 +13729,7 @@ function MovePaletteScreen({ kept = null, children }) {
 // src/components/MoveTimeline.tsx
 var import_react17 = require("react");
 var import_react_dom6 = require("react-dom");
-var import_TweakStore19 = require("tweakers/store");
+var import_TweakStore20 = require("tweakers/store");
 
 // src/store/persist.ts
 var STORAGE_VERSION = "v1";
@@ -14050,7 +14070,7 @@ var TimelineStoreClass = class {
 var TimelineStore = /* @__PURE__ */ new TimelineStoreClass();
 
 // src/timeline-core.ts
-var import_TweakStore17 = require("tweakers/store");
+var import_TweakStore18 = require("tweakers/store");
 var CLIP_VALUE_STEP = 0.01;
 var TIMELINE_MIN_CLIP_DURATION = 0.05;
 var DEFAULT_STEP_DURATION = 0.3;
@@ -14303,7 +14323,7 @@ function parseTimelineConfig(config) {
     setTweakPath(tweakConfig, path, clipTweak);
     clips.push({
       key: path,
-      label: (0, import_TweakStore17.formatLabel)(childKey),
+      label: (0, import_TweakStore18.formatLabel)(childKey),
       color: TIMELINE_CLIP_COLORS[index % TIMELINE_CLIP_COLORS.length],
       loop: normalizeLoopMode(clip.loop),
       group,
@@ -14341,7 +14361,7 @@ function inferFromToRange(key, value, counterpart) {
   const extent = Math.max(Math.abs(lo), Math.abs(hi), 1);
   const min = lo < 0 ? -extent * 2 : 0;
   const max = Math.max(extent * 2, hi);
-  return [value, min, max, (0, import_TweakStore17.inferStep)(min, max)];
+  return [value, min, max, (0, import_TweakStore18.inferStep)(min, max)];
 }
 function withFromToRanges(config, counterpart) {
   const result = {};
@@ -14385,7 +14405,7 @@ function resolvedAtPath(resolved, path) {
   return isPlainObject(node) ? node : {};
 }
 function computeStaticClips(parsed, flatValues) {
-  const resolved = (0, import_TweakStore17.resolveTweakValues)(parsed.tweakConfig, flatValues);
+  const resolved = (0, import_TweakStore18.resolveTweakValues)(parsed.tweakConfig, flatValues);
   return parsed.clips.map(
     (clip) => buildClipStatic(resolvedAtPath(resolved, clip.key), clip, parsed.duration)
   );
@@ -14673,7 +14693,7 @@ function interpolateResolved(from, to, p) {
   return p < 0.5 ? from : to;
 }
 function parseHex2(hex) {
-  if (!(0, import_TweakStore17.isHexColor)(hex)) return null;
+  if (!(0, import_TweakStore18.isHexColor)(hex)) return null;
   let h = hex.slice(1);
   if (h.length === 3) h = h.split("").map((c) => c + c).join("");
   return [
@@ -14757,7 +14777,7 @@ function formatSeconds(value) {
 }
 
 // src/move-presets.ts
-var import_TweakStore18 = require("tweakers/store");
+var import_TweakStore19 = require("tweakers/store");
 var CHOSEN_LINGER_MS = 800;
 var CLOSE_ANIM_MS = 450;
 var ENTER_MS = 20;
@@ -14806,23 +14826,23 @@ var MovePresetStoreClass = class {
   }
   /** The panel's presets as screen rows — provider list when one is set. */
   items(panelId) {
-    const provider = import_TweakStore18.TweakStore.getPresetProvider(panelId);
+    const provider = import_TweakStore19.TweakStore.getPresetProvider(panelId);
     if (provider) return provider.presets.map((p) => ({ id: p.id, label: p.label }));
-    return import_TweakStore18.TweakStore.getPresets(panelId).map((p) => ({ id: p.id, label: p.name }));
+    return import_TweakStore19.TweakStore.getPresets(panelId).map((p) => ({ id: p.id, label: p.name }));
   }
   /** Play a row's values without recording them — the browsing preview. */
   applyPreview(id) {
     const view = this.view;
     if (!view || !id || !this.previewEnabled || !this.original) return;
-    const preset = import_TweakStore18.TweakStore.getPresets(view.panelId).find((p) => p.id === id);
-    if (preset) import_TweakStore18.TweakStore.previewValues(view.panelId, preset.values);
+    const preset = import_TweakStore19.TweakStore.getPresets(view.panelId).find((p) => p.id === id);
+    if (preset) import_TweakStore19.TweakStore.previewValues(view.panelId, preset.values);
   }
   open(panelId) {
     this.clearTimers();
-    const active = import_TweakStore18.TweakStore.getActivePresetId(panelId);
+    const active = import_TweakStore19.TweakStore.getActivePresetId(panelId);
     const items = this.items(panelId);
     const cursor = (active && items.some((i) => i.id === active) ? active : items[0]?.id) ?? null;
-    this.original = import_TweakStore18.TweakStore.getPresetProvider(panelId) ? null : { ...import_TweakStore18.TweakStore.getValues(panelId) };
+    this.original = import_TweakStore19.TweakStore.getPresetProvider(panelId) ? null : { ...import_TweakStore19.TweakStore.getValues(panelId) };
     this.view = { panelId, phase: "enter", cursor, chosen: null, comparing: false };
     this.notify();
     this.later(ENTER_MS, () => {
@@ -14853,7 +14873,7 @@ var MovePresetStoreClass = class {
   cancel() {
     const view = this.view;
     if (!view || view.phase === "closing" || view.chosen) return;
-    if (this.original) import_TweakStore18.TweakStore.previewValues(view.panelId, this.original);
+    if (this.original) import_TweakStore19.TweakStore.previewValues(view.panelId, this.original);
     this.view = { ...view, comparing: false };
     this.close();
   }
@@ -14892,7 +14912,7 @@ var MovePresetStoreClass = class {
     if (!view || view.phase !== "open" || view.chosen || view.comparing) return;
     if (!this.previewEnabled || !this.original) return;
     this.view = { ...view, comparing: true };
-    import_TweakStore18.TweakStore.previewValues(view.panelId, this.original);
+    import_TweakStore19.TweakStore.previewValues(view.panelId, this.original);
     this.notify();
   }
   /** Menu released: back to the previewed row. */
@@ -14911,9 +14931,9 @@ var MovePresetStoreClass = class {
     const view = this.view;
     if (!view || view.phase !== "open" || view.chosen) return;
     if (!this.items(view.panelId).some((i) => i.id === id)) return;
-    const provider = import_TweakStore18.TweakStore.getPresetProvider(view.panelId);
+    const provider = import_TweakStore19.TweakStore.getPresetProvider(view.panelId);
     if (provider) void provider.onSelect(id);
-    else import_TweakStore18.TweakStore.loadPreset(view.panelId, id);
+    else import_TweakStore19.TweakStore.loadPreset(view.panelId, id);
     this.view = { ...view, cursor: id, chosen: id, comparing: false };
     this.notify();
     this.later(CHOSEN_LINGER_MS, () => this.close());
@@ -14936,9 +14956,9 @@ var MovePresetStoreClass = class {
     const saving = this.saving;
     if (!saving) return;
     const label = name.trim() || saving.suggested;
-    const provider = import_TweakStore18.TweakStore.getPresetProvider(saving.panelId);
+    const provider = import_TweakStore19.TweakStore.getPresetProvider(saving.panelId);
     if (provider) void provider.onCreate(label);
-    else import_TweakStore18.TweakStore.savePreset(saving.panelId, label);
+    else import_TweakStore19.TweakStore.savePreset(saving.panelId, label);
     this.saving = null;
     this.notify();
   }
@@ -15290,9 +15310,9 @@ function MoveTimeline({
     () => TimelineStore.getTimeline(id)
   );
   const values = (0, import_react17.useSyncExternalStore)(
-    (0, import_react17.useCallback)((cb) => import_TweakStore19.TweakStore.subscribe(id, cb), [id]),
-    () => import_TweakStore19.TweakStore.getValues(id),
-    () => import_TweakStore19.TweakStore.getValues(id)
+    (0, import_react17.useCallback)((cb) => import_TweakStore20.TweakStore.subscribe(id, cb), [id]),
+    () => import_TweakStore20.TweakStore.getValues(id),
+    () => import_TweakStore20.TweakStore.getValues(id)
   );
   (0, import_react17.useSyncExternalStore)(
     (0, import_react17.useCallback)((cb) => MoveTimelineStore.subscribe(cb), []),
@@ -15557,7 +15577,7 @@ function buildRows(clips, values, duration) {
     if (!layer) {
       layer = [];
       layers.set(clip.group, layer);
-      rows.push({ key: `layer:${clip.group}`, label: (0, import_TweakStore19.formatLabel)(clip.group), clips: [] });
+      rows.push({ key: `layer:${clip.group}`, label: (0, import_TweakStore20.formatLabel)(clip.group), clips: [] });
     }
     layer.push(clip);
   }
@@ -15627,17 +15647,17 @@ function TimelineClipBar({
     const dt = dx / pxPerSecond;
     if (d.mode === "join" && d.legs && d.join !== void 0) {
       const others = d.legs.reduce((sum, leg, i) => i === d.join ? sum : sum + leg, 0);
-      import_TweakStore19.TweakStore.updateValue(timelineId, `${clip.key}.${legs[d.join].key ?? ""}.duration`, clampStepResize(d.legs[d.join] + dt, d.at, others, duration));
+      import_TweakStore20.TweakStore.updateValue(timelineId, `${clip.key}.${legs[d.join].key ?? ""}.duration`, clampStepResize(d.legs[d.join] + dt, d.at, others, duration));
     } else if (d.mode === "move") {
-      import_TweakStore19.TweakStore.updateValue(timelineId, `${clip.key}.at`, clampClipMove(d.at + dt, d.duration, duration));
+      import_TweakStore20.TweakStore.updateValue(timelineId, `${clip.key}.at`, clampClipMove(d.at + dt, d.duration, duration));
     } else if (d.mode === "end") {
-      import_TweakStore19.TweakStore.updateValue(timelineId, `${clip.key}.duration`, clampClipResizeEnd(d.duration + dt, d.at, duration));
+      import_TweakStore20.TweakStore.updateValue(timelineId, `${clip.key}.duration`, clampClipResizeEnd(d.duration + dt, d.at, duration));
     } else if (d.legs?.length) {
       const next = clampClipResizeStart(Math.max(0, d.at + dt), d.at, d.legs[0]);
-      import_TweakStore19.TweakStore.updateValues(timelineId, { [`${clip.key}.at`]: next.at, [`${clip.key}.${legs[0].key ?? ""}.duration`]: next.duration });
+      import_TweakStore20.TweakStore.updateValues(timelineId, { [`${clip.key}.at`]: next.at, [`${clip.key}.${legs[0].key ?? ""}.duration`]: next.duration });
     } else {
       const next = clampClipResizeStart(Math.max(0, d.at + dt), d.at, d.duration);
-      import_TweakStore19.TweakStore.updateValues(timelineId, { [`${clip.key}.at`]: next.at, [`${clip.key}.duration`]: next.duration });
+      import_TweakStore20.TweakStore.updateValues(timelineId, { [`${clip.key}.at`]: next.at, [`${clip.key}.duration`]: next.duration });
     }
   };
   const onUp = () => {
@@ -16167,7 +16187,7 @@ function validateTimeline(raw) {
 
 // src/automation-slot.ts
 var import_ModulationStore2 = require("tweakers/modulation-store");
-var import_TweakStore20 = require("tweakers/store");
+var import_TweakStore21 = require("tweakers/store");
 var DIALS = ["lane", "time", "value", "smooth"];
 var STEPS = 16;
 var SMOOTH_MIN = 0.25;
@@ -16306,7 +16326,7 @@ var AutomationSlot = class {
       this.store.select({ key: lane.key, point: nearestPoint2(lane, this.phase()) });
     }
     this.register();
-    const offPanel = import_TweakStore20.TweakStore.subscribe(panelId, () => this.onPanel());
+    const offPanel = import_TweakStore21.TweakStore.subscribe(panelId, () => this.onPanel());
     const releaseKnob = MoveVolumeDisplay.claim({ label: "time", getValue: () => timelineReadout(this.store.clock().time) });
     const keys = [
       ["back", () => import_ModulationStore2.ModulationStore.closeSettings(), "Leave"],
@@ -16545,9 +16565,9 @@ var AutomationSlot = class {
     const { shape, config } = this.config();
     this.shape = shape;
     this.applying = true;
-    import_TweakStore20.TweakStore.registerPanel(this.panelId, this.options.title ?? "Automation", config, void 0, { kind: "modulation" });
+    import_TweakStore21.TweakStore.registerPanel(this.panelId, this.options.title ?? "Automation", config, void 0, { kind: "modulation" });
     this.applying = false;
-    const values = import_TweakStore20.TweakStore.getValues(this.panelId);
+    const values = import_TweakStore21.TweakStore.getValues(this.panelId);
     this.written = { time: values.time, value: values.value };
     this.markDisabled();
   }
@@ -16566,11 +16586,11 @@ var AutomationSlot = class {
     const sel = this.store.getSelection();
     const point = lane && sel.point !== null ? lane.points[sel.point] : void 0;
     const duration = this.store.clock().duration;
-    const values = import_TweakStore20.TweakStore.getValues(id);
+    const values = import_TweakStore21.TweakStore.getValues(id);
     const guarded = this.applying;
     this.applying = true;
     const write2 = (path, v) => {
-      if (values[path] !== v) import_TweakStore20.TweakStore.updateValue(id, path, v);
+      if (values[path] !== v) import_TweakStore21.TweakStore.updateValue(id, path, v);
     };
     write2("lane", lane?.key ?? "");
     if (point) {
@@ -16579,7 +16599,7 @@ var AutomationSlot = class {
     }
     write2("smooth", this.smoothAmount);
     this.applying = guarded;
-    const now = import_TweakStore20.TweakStore.getValues(id);
+    const now = import_TweakStore21.TweakStore.getValues(id);
     this.written = { time: now.time, value: now.value };
     this.markDisabled();
   }
@@ -16589,15 +16609,15 @@ var AutomationSlot = class {
     if (!id) return;
     const lane = this.lane();
     const pointless = !lane || this.store.getSelection().point === null;
-    import_TweakStore20.TweakStore.setDisabled(id, "time", pointless);
-    import_TweakStore20.TweakStore.setDisabled(id, "value", pointless);
-    import_TweakStore20.TweakStore.setDisabled(id, "smooth", !lane || lane.interp === "color");
+    import_TweakStore21.TweakStore.setDisabled(id, "time", pointless);
+    import_TweakStore21.TweakStore.setDisabled(id, "value", pointless);
+    import_TweakStore21.TweakStore.setDisabled(id, "smooth", !lane || lane.interp === "color");
   }
   /** A dial turned — on the screen or the Move. */
   onPanel() {
     const id = this.panelId;
     if (this.applying || !id) return;
-    const values = import_TweakStore20.TweakStore.getValues(id);
+    const values = import_TweakStore21.TweakStore.getValues(id);
     const smooth2 = Number(values.smooth);
     if (Number.isFinite(smooth2)) this.smoothAmount = Math.min(SMOOTH_MAX, Math.max(SMOOTH_MIN, smooth2));
     const lanes = this.store.timeline().lanes;
@@ -17473,7 +17493,7 @@ var import_react21 = require("react");
 
 // src/components/MoveSlot.tsx
 var import_react20 = require("react");
-var import_TweakStore21 = require("tweakers/store");
+var import_TweakStore22 = require("tweakers/store");
 var import_ModulationStore3 = require("tweakers/modulation-store");
 var import_jsx_runtime21 = require("react/jsx-runtime");
 var flat4 = (controls, out = []) => {
@@ -17483,7 +17503,7 @@ var flat4 = (controls, out = []) => {
   }
   return out;
 };
-var findPanel = (panel) => import_TweakStore21.TweakStore.getPanel(panel) ?? import_TweakStore21.TweakStore.getPanels().find((p) => p.name === panel);
+var findPanel = (panel) => import_TweakStore22.TweakStore.getPanel(panel) ?? import_TweakStore22.TweakStore.getPanels().find((p) => p.name === panel);
 var warned = /* @__PURE__ */ new Set();
 function warnOnce(key, message) {
   if (warned.has(key)) return;
@@ -17492,19 +17512,19 @@ function warnOnce(key, message) {
 }
 function MoveSlot({ panel, path, valueFirst = false, className, style }) {
   const config = (0, import_react20.useSyncExternalStore)(
-    (0, import_react20.useCallback)((cb) => import_TweakStore21.TweakStore.subscribeGlobal(cb), []),
+    (0, import_react20.useCallback)((cb) => import_TweakStore22.TweakStore.subscribeGlobal(cb), []),
     () => findPanel(panel),
     () => void 0
   );
   const panelId = config?.id;
   const values = (0, import_react20.useSyncExternalStore)(
-    (0, import_react20.useCallback)((cb) => panelId ? import_TweakStore21.TweakStore.subscribe(panelId, cb) : () => {
+    (0, import_react20.useCallback)((cb) => panelId ? import_TweakStore22.TweakStore.subscribe(panelId, cb) : () => {
     }, [panelId]),
-    () => panelId ? import_TweakStore21.TweakStore.getValues(panelId) : void 0,
+    () => panelId ? import_TweakStore22.TweakStore.getValues(panelId) : void 0,
     () => void 0
   );
   (0, import_react20.useSyncExternalStore)(
-    (0, import_react20.useCallback)((cb) => panelId ? import_TweakStore21.TweakStore.subscribeControlState(panelId, cb) : () => {
+    (0, import_react20.useCallback)((cb) => panelId ? import_TweakStore22.TweakStore.subscribeControlState(panelId, cb) : () => {
     }, [panelId]),
     () => 0,
     () => 0
@@ -17517,11 +17537,11 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
   (0, import_react20.useSyncExternalStore)(MoveColorStore.subscribe, MoveColorStore.getVersion, () => 0);
   const pathKey = Array.isArray(path) ? path.join("\0") : path;
   (0, import_react20.useSyncExternalStore)(
-    (0, import_react20.useCallback)((cb) => panelId ? import_TweakStore21.TweakStore.subscribeControlState(panelId, cb) : () => {
+    (0, import_react20.useCallback)((cb) => panelId ? import_TweakStore22.TweakStore.subscribeControlState(panelId, cb) : () => {
     }, [panelId]),
     () => panelId ? pathKey.split("\0").map((p) => {
-      const level2 = import_TweakStore21.TweakStore.getSelectLevel(panelId, p);
-      return `${import_TweakStore21.TweakStore.getListCursor(panelId, p)}${level2 ? `/${level2.open.join(".")}:${level2.cursor}` : ""}`;
+      const level2 = import_TweakStore22.TweakStore.getSelectLevel(panelId, p);
+      return `${import_TweakStore22.TweakStore.getListCursor(panelId, p)}${level2 ? `/${level2.open.join(".")}:${level2.cursor}` : ""}`;
     }).join(",") : "",
     () => ""
   );
@@ -17545,8 +17565,8 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
     return null;
   }
   const all = metas;
-  const write2 = (meta2, next) => import_TweakStore21.TweakStore.updateValue(panelId, meta2.path, next);
-  const off = (meta2) => import_TweakStore21.TweakStore.isDisabled(panelId, meta2.path);
+  const write2 = (meta2, next) => import_TweakStore22.TweakStore.updateValue(panelId, meta2.path, next);
+  const off = (meta2) => import_TweakStore22.TweakStore.isDisabled(panelId, meta2.path);
   const cls = className ? `tweakers-move-dial ${className}` : "tweakers-move-dial";
   const drag = (meta2, turn2, release) => ({
     onPointerDown: (e) => {
@@ -17588,7 +17608,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
     return movePressEnd(press, meta2.path);
   };
   const reset = (meta2) => {
-    const first2 = import_TweakStore21.TweakStore.getDefault(panelId, meta2.path);
+    const first2 = import_TweakStore22.TweakStore.getDefault(panelId, meta2.path);
     if (first2 !== void 0 && !off(meta2)) write2(meta2, first2);
   };
   const turn = (meta2) => ({
@@ -17620,7 +17640,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
     },
     onPointerUp: (e) => {
       if (!end(meta2) || off(meta2)) return;
-      const next = e.shiftKey ? import_TweakStore21.TweakStore.getDefault(panelId, meta2.path) : moveOptionClick(meta2, values[meta2.path], listRow.current);
+      const next = e.shiftKey ? import_TweakStore22.TweakStore.getDefault(panelId, meta2.path) : moveOptionClick(meta2, values[meta2.path], listRow.current);
       if (next !== void 0) write2(meta2, next);
     },
     onPointerCancel: () => {
@@ -17836,11 +17856,11 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
   if (meta.type === "multiselect") {
     const options = moveMultiselectOptions(meta);
     const checked = moveMultiselectChecked(meta, value);
-    const cursor = import_TweakStore21.TweakStore.getListCursor(panelId, meta.path);
+    const cursor = import_TweakStore22.TweakStore.getListCursor(panelId, meta.path);
     const tick2 = (index) => {
       const option = options[index];
       if (!option || off(meta)) return;
-      import_TweakStore21.TweakStore.setListCursor(panelId, meta.path, index);
+      import_TweakStore22.TweakStore.setListCursor(panelId, meta.path, index);
       write2(meta, moveMultiselectToggle(meta, values[meta.path], option.value));
     };
     return /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(
@@ -17857,12 +17877,12 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
         onPointerDown: (e) => {
           if (e.button > 0 || off(meta)) return;
           listRow.current = moveListRowIn(e.currentTarget, e);
-          begin(e, meta, import_TweakStore21.TweakStore.getListCursor(panelId, meta.path));
+          begin(e, meta, import_TweakStore22.TweakStore.getListCursor(panelId, meta.path));
         },
         onPointerMove: (e) => {
           moveListHover(e.currentTarget, e);
-          const p = movePressTravel(press, meta.path, e, () => import_TweakStore21.TweakStore.getListCursor(panelId, meta.path));
-          if (p && !off(meta)) import_TweakStore21.TweakStore.setListCursor(panelId, meta.path, moveListWalk(p, e, options.length));
+          const p = movePressTravel(press, meta.path, e, () => import_TweakStore22.TweakStore.getListCursor(panelId, meta.path));
+          if (p && !off(meta)) import_TweakStore22.TweakStore.setListCursor(panelId, meta.path, moveListWalk(p, e, options.length));
         },
         onPointerUp: (e) => {
           if (!end(meta) || off(meta)) return;
@@ -17876,7 +17896,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
         onWheel: (e) => {
           if (e.defaultPrevented || !e.deltaY || off(meta)) return;
           e.stopPropagation();
-          import_TweakStore21.TweakStore.setListCursor(panelId, meta.path, cursor + Math.sign(e.deltaY));
+          import_TweakStore22.TweakStore.setListCursor(panelId, meta.path, cursor + Math.sign(e.deltaY));
         },
         onKeyDown: (e) => {
           if (off(meta)) return;
@@ -17885,7 +17905,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
           e.preventDefault();
           e.stopPropagation();
           if (next === "toggle") tick2(cursor);
-          else import_TweakStore21.TweakStore.setListCursor(panelId, meta.path, next.cursor);
+          else import_TweakStore22.TweakStore.setListCursor(panelId, meta.path, next.cursor);
         },
         children: /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(MoveSlotMultiselectBody, { label: meta.label, options, checked, cursor })
       }
@@ -18099,10 +18119,10 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
       }
     );
   }
-  const level = meta.type === "select" && meta.optionTree && isEnumDial(meta) ? import_TweakStore21.TweakStore.getSelectLevel(panelId, meta.path) : null;
+  const level = meta.type === "select" && meta.optionTree && isEnumDial(meta) ? import_TweakStore22.TweakStore.getSelectLevel(panelId, meta.path) : null;
   if (level) {
     const activeIdx = enumIndex(meta, value);
-    const levelNow = () => import_TweakStore21.TweakStore.getSelectLevel(panelId, meta.path) ?? level;
+    const levelNow = () => import_TweakStore22.TweakStore.getSelectLevel(panelId, meta.path) ?? level;
     return /* @__PURE__ */ (0, import_jsx_runtime21.jsxs)(
       "div",
       {
@@ -18124,14 +18144,14 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
           moveListHover(e.currentTarget, e);
           const now = levelNow();
           const p = movePressTravel(press, meta.path, e, () => moveSelectWalkIndex(now));
-          if (p && !off(meta)) import_TweakStore21.TweakStore.setSelectCursor(panelId, meta.path, moveSelectFromWalk(now, moveListWalk(p, e, moveSelectWalkCount(now))));
+          if (p && !off(meta)) import_TweakStore22.TweakStore.setSelectCursor(panelId, meta.path, moveSelectFromWalk(now, moveListWalk(p, e, moveSelectWalkCount(now))));
         },
         onPointerUp: (e) => {
           if (!end(meta) || off(meta)) return;
           if (e.shiftKey) return reset(meta);
           const click = moveSelectClick(levelNow(), listRow.current, listBack.current);
-          if (click.cursor !== void 0) import_TweakStore21.TweakStore.setSelectCursor(panelId, meta.path, click.cursor);
-          if (click.tap) import_TweakStore21.TweakStore.tapSelect(panelId, meta.path);
+          if (click.cursor !== void 0) import_TweakStore22.TweakStore.setSelectCursor(panelId, meta.path, click.cursor);
+          if (click.tap) import_TweakStore22.TweakStore.tapSelect(panelId, meta.path);
         },
         onPointerCancel: () => {
           end(meta);
@@ -18140,7 +18160,7 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
         onWheel: (e) => {
           if (e.defaultPrevented || !e.deltaY || off(meta)) return;
           e.stopPropagation();
-          import_TweakStore21.TweakStore.setSelectCursor(panelId, meta.path, levelNow().cursor + Math.sign(e.deltaY));
+          import_TweakStore22.TweakStore.setSelectCursor(panelId, meta.path, levelNow().cursor + Math.sign(e.deltaY));
         },
         onKeyDown: (e) => {
           if (off(meta)) return;
@@ -18149,8 +18169,8 @@ function MoveSlot({ panel, path, valueFirst = false, className, style }) {
           if (!next) return;
           e.preventDefault();
           e.stopPropagation();
-          if (next === "toggle") import_TweakStore21.TweakStore.tapSelect(panelId, meta.path);
-          else import_TweakStore21.TweakStore.setSelectCursor(panelId, meta.path, moveSelectFromWalk(now, next.cursor));
+          if (next === "toggle") import_TweakStore22.TweakStore.tapSelect(panelId, meta.path);
+          else import_TweakStore22.TweakStore.setSelectCursor(panelId, meta.path, moveSelectFromWalk(now, next.cursor));
         },
         children: [
           /* @__PURE__ */ (0, import_jsx_runtime21.jsx)(MoveModRing, { panelId, path: meta.path }),
@@ -18524,7 +18544,7 @@ function searchType(query) {
 }
 function holdPad(panelId, path) {
   const set2 = (on) => {
-    if (import_TweakStore22.TweakStore.getValue(panelId, path) !== on) import_TweakStore22.TweakStore.updateValue(panelId, path, on);
+    if (import_TweakStore23.TweakStore.getValue(panelId, path) !== on) import_TweakStore23.TweakStore.updateValue(panelId, path, on);
   };
   return {
     onPointerDown: (e) => {
@@ -18634,18 +18654,18 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   }, [volume]);
   const onlyKey = only === void 0 ? void 0 : JSON.stringify(Array.isArray(only) ? only : [only]);
   const read2 = (0, import_react22.useCallback)(() => {
-    return import_TweakStore22.TweakStore.selectPanels(onlyKey === void 0 ? void 0 : JSON.parse(onlyKey));
+    return import_TweakStore23.TweakStore.selectPanels(onlyKey === void 0 ? void 0 : JSON.parse(onlyKey));
   }, [onlyKey]);
   (0, import_react22.useEffect)(() => {
     setMounted(true);
     MoveWaveformStore.ensureSettings();
     MoveTrackLabels.ensureSettings();
     setPanels(read2());
-    return import_TweakStore22.TweakStore.subscribeGlobal(() => setPanels(read2()));
+    return import_TweakStore23.TweakStore.subscribeGlobal(() => setPanels(read2()));
   }, [read2]);
   const settingsKey = settings2 === void 0 ? void 0 : JSON.stringify(Array.isArray(settings2) ? settings2 : [settings2]);
-  const namedRooms = settingsKey === void 0 ? [] : import_TweakStore22.TweakStore.selectPanels(JSON.parse(settingsKey));
-  const kitRooms = [import_TweakStore22.TweakStore.getPanel(MOVE_WAVEFORM_PANEL), import_TweakStore22.TweakStore.getPanel(MOVE_PANEL_SETTINGS)].filter((p) => p !== void 0);
+  const namedRooms = settingsKey === void 0 ? [] : import_TweakStore23.TweakStore.selectPanels(JSON.parse(settingsKey));
+  const kitRooms = [import_TweakStore23.TweakStore.getPanel(MOVE_WAVEFORM_PANEL), import_TweakStore23.TweakStore.getPanel(MOVE_PANEL_SETTINGS)].filter((p) => p !== void 0);
   const settingsRooms = [...namedRooms, ...kitRooms];
   const roomIds = settingsRooms.map((p) => p.id);
   const settingsOpen = (0, import_react22.useSyncExternalStore)(
@@ -18658,9 +18678,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const trackIcons = [...pages.length > 1 ? pages.map((pg) => pg.panel) : [], ...settingsRooms.length > 1 ? settingsRooms : []].some((panel) => moveTrackIcon(panel) !== void 0);
   (0, import_react22.useEffect)(() => MoveTrackLabels.setIconsAvailable(trackIcons), [trackIcons]);
   const panelSettings = (0, import_react22.useSyncExternalStore)(
-    (0, import_react22.useCallback)((cb) => import_TweakStore22.TweakStore.subscribe(MOVE_PANEL_SETTINGS, cb), []),
-    () => import_TweakStore22.TweakStore.getValues(MOVE_PANEL_SETTINGS),
-    () => import_TweakStore22.TweakStore.getValues(MOVE_PANEL_SETTINGS)
+    (0, import_react22.useCallback)((cb) => import_TweakStore23.TweakStore.subscribe(MOVE_PANEL_SETTINGS, cb), []),
+    () => import_TweakStore23.TweakStore.getValues(MOVE_PANEL_SETTINGS),
+    () => import_TweakStore23.TweakStore.getValues(MOVE_PANEL_SETTINGS)
   );
   const trackLabelStyle = moveTrackLabelStyle(panelSettings, trackIcons);
   const trackFace = (panel, color2, key) => {
@@ -18674,7 +18694,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   };
   const underModSettings = import_ModulationStore4.ModulationStore.getSettings();
   const modSettings = settingsOpen ? null : underModSettings;
-  const settingsPanel = modSettings ? import_TweakStore22.TweakStore.getPanel(modSettings.panelId) : void 0;
+  const settingsPanel = modSettings ? import_TweakStore23.TweakStore.getPanel(modSettings.panelId) : void 0;
   const modLayout = settingsPanel ? import_ModulationStore4.ModulationStore.getSettingsLayout() : null;
   const [roomTrack, setRoomTrack] = (0, import_react22.useState)(0);
   const roomPages = settingsOpen ? scroll ? settingsRooms.slice(0, MOVE_TRACKS).map(buildMoveStrip) : buildMovePages(settingsRooms) : [];
@@ -19076,14 +19096,14 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const clipIndex = composition ? Math.min(composition.segments.length - 1, Math.max(0, Math.round(Number(modSlot.params.selected) || 0))) : 0;
   const previewPath = modLayout?.dials.find((d) => d.preview)?.path ?? null;
   const values = (0, import_react22.useSyncExternalStore)(
-    (0, import_react22.useCallback)((cb) => pageId ? import_TweakStore22.TweakStore.subscribe(pageId, cb) : () => {
+    (0, import_react22.useCallback)((cb) => pageId ? import_TweakStore23.TweakStore.subscribe(pageId, cb) : () => {
     }, [pageId]),
-    () => pageId ? import_TweakStore22.TweakStore.getValues(pageId) : void 0,
+    () => pageId ? import_TweakStore23.TweakStore.getValues(pageId) : void 0,
     () => void 0
   );
   const [, bumpControlState] = (0, import_react22.useState)(0);
   (0, import_react22.useEffect)(
-    () => pageId ? import_TweakStore22.TweakStore.subscribeControlState(pageId, () => bumpControlState((n) => n + 1)) : void 0,
+    () => pageId ? import_TweakStore23.TweakStore.subscribeControlState(pageId, () => bumpControlState((n) => n + 1)) : void 0,
     [pageId]
   );
   (0, import_react22.useSyncExternalStore)(
@@ -19171,9 +19191,9 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   const chipValue = (meta) => moveChipValue(meta, meta.resonanceOf ? filterChipValue(meta, values[meta.resonanceOf]) : values[meta.path]);
   const dialReading = (meta) => moveDialReading(meta, values[meta.path]);
   const rangeReading = (meta) => moveRangeReading(meta, values[meta.path]);
-  const write2 = (meta, next) => import_TweakStore22.TweakStore.updateValue(page.panel.id, meta.path, next);
+  const write2 = (meta, next) => import_TweakStore23.TweakStore.updateValue(page.panel.id, meta.path, next);
   const dialFromKeyboard = (e, meta) => {
-    if (import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+    if (import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) return;
     const next = moveDialKey(meta, values[meta.path], e);
     if (next === null) return;
     e.preventDefault();
@@ -19198,22 +19218,22 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     return tapped;
   };
   const resetValue = (meta) => {
-    const value = import_TweakStore22.TweakStore.getDefault(page.panel.id, meta.path);
-    if (value !== void 0 && !import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) write2(meta, value);
+    const value = import_TweakStore23.TweakStore.getDefault(page.panel.id, meta.path);
+    if (value !== void 0 && !import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) write2(meta, value);
   };
   const dialDrag = (meta) => ({
     onPointerDown: (e) => {
-      if (e.button > 0 || import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (e.button > 0 || import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) return;
       beginPress(e, meta.path, normalizeDial(meta, values[meta.path]));
     },
     onPointerMove: (e) => {
       const p = movePressTravel(pressRef, meta.path, e, () => normalizeDial(meta, values[meta.path]));
-      if (p && !import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) write2(meta, moveTurnValue(meta, p, e, moveTurnExtent(e.currentTarget.getBoundingClientRect())));
+      if (p && !import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) write2(meta, moveTurnValue(meta, p, e, moveTurnExtent(e.currentTarget.getBoundingClientRect())));
     },
     onPointerUp: (e) => {
       if (!endPress(meta.path)) return;
       if (e.shiftKey) resetValue(meta);
-      else if (!import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) meta.onTap?.();
+      else if (!import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) meta.onTap?.();
     },
     onPointerCancel: () => {
       endPress(meta.path);
@@ -19221,18 +19241,18 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   });
   const optionDrag = (meta) => ({
     onPointerDown: (e) => {
-      if (e.button > 0 || import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (e.button > 0 || import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) return;
       listRowRef.current = moveOptionRowIn(e.currentTarget, meta, values[meta.path], e);
       beginPress(e, meta.path, enumIndex(meta, values[meta.path]));
     },
     onPointerMove: (e) => {
       moveListHover(e.currentTarget, e);
       const p = movePressTravel(pressRef, meta.path, e, () => enumIndex(meta, values[meta.path]));
-      const next = p && !import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path) ? moveOptionStep(meta, values[meta.path], p, e) : void 0;
+      const next = p && !import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path) ? moveOptionStep(meta, values[meta.path], p, e) : void 0;
       if (next !== void 0) write2(meta, next);
     },
     onPointerUp: (e) => {
-      if (!endPress(meta.path) || import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (!endPress(meta.path) || import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) return;
       if (e.shiftKey) resetValue(meta);
       else {
         const next = moveOptionClick(meta, values[meta.path], listRowRef.current);
@@ -19244,27 +19264,27 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     },
     onPointerLeave: (e) => moveListHover(e.currentTarget, null)
   });
-  const listCursor = (meta) => import_TweakStore22.TweakStore.getListCursor(page.panel.id, meta.path);
-  const setListCursor = (meta, index) => import_TweakStore22.TweakStore.setListCursor(page.panel.id, meta.path, index);
+  const listCursor = (meta) => import_TweakStore23.TweakStore.getListCursor(page.panel.id, meta.path);
+  const setListCursor = (meta, index) => import_TweakStore23.TweakStore.setListCursor(page.panel.id, meta.path, index);
   const tickRow = (meta, index) => {
     const option = moveMultiselectOptions(meta)[index];
-    if (!option || import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+    if (!option || import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) return;
     setListCursor(meta, index);
     write2(meta, moveMultiselectToggle(meta, values[meta.path], option.value));
   };
   const listDrag = (meta) => ({
     onPointerDown: (e) => {
-      if (e.button > 0 || import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (e.button > 0 || import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) return;
       listRowRef.current = moveListRowIn(e.currentTarget, e);
       beginPress(e, meta.path, listCursor(meta));
     },
     onPointerMove: (e) => {
       moveListHover(e.currentTarget, e);
       const p = movePressTravel(pressRef, meta.path, e, () => listCursor(meta));
-      if (p && !import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) setListCursor(meta, moveListWalk(p, e, moveMultiselectOptions(meta).length));
+      if (p && !import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) setListCursor(meta, moveListWalk(p, e, moveMultiselectOptions(meta).length));
     },
     onPointerUp: (e) => {
-      if (!endPress(meta.path) || import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (!endPress(meta.path) || import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) return;
       if (e.shiftKey) return resetValue(meta);
       tickRow(meta, listRowRef.current >= 0 ? listRowRef.current : listCursor(meta));
     },
@@ -19275,12 +19295,12 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     // The panel's own wheel (the strip, a navigator, a search) answers
     // first and keeps what it took; otherwise a notch walks the list a row.
     onWheel: (e) => {
-      if (e.defaultPrevented || !e.deltaY || import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (e.defaultPrevented || !e.deltaY || import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) return;
       e.stopPropagation();
       setListCursor(meta, listCursor(meta) + Math.sign(e.deltaY));
     },
     onKeyDown: (e) => {
-      if (import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) return;
       const next = moveListKey(listCursor(meta), moveMultiselectOptions(meta).length, e);
       if (!next) return;
       e.preventDefault();
@@ -19289,11 +19309,11 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       else setListCursor(meta, next.cursor);
     }
   });
-  const selectLevelOf = (meta) => import_TweakStore22.TweakStore.getSelectLevel(page.panel.id, meta.path);
+  const selectLevelOf = (meta) => import_TweakStore23.TweakStore.getSelectLevel(page.panel.id, meta.path);
   const folderDrag = (meta) => ({
     onPointerDown: (e) => {
       const level = selectLevelOf(meta);
-      if (e.button > 0 || !level || import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (e.button > 0 || !level || import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) return;
       listRowRef.current = moveListRowIn(e.currentTarget, e);
       listBackRef.current = moveListBackIn(e.currentTarget, e);
       beginPress(e, meta.path, moveSelectWalkIndex(level));
@@ -19303,18 +19323,18 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
       const level = selectLevelOf(meta);
       if (!level) return;
       const p = movePressTravel(pressRef, meta.path, e, () => moveSelectWalkIndex(level));
-      if (p && !import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) {
-        import_TweakStore22.TweakStore.setSelectCursor(page.panel.id, meta.path, moveSelectFromWalk(level, moveListWalk(p, e, moveSelectWalkCount(level))));
+      if (p && !import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) {
+        import_TweakStore23.TweakStore.setSelectCursor(page.panel.id, meta.path, moveSelectFromWalk(level, moveListWalk(p, e, moveSelectWalkCount(level))));
       }
     },
     onPointerUp: (e) => {
-      if (!endPress(meta.path) || import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (!endPress(meta.path) || import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) return;
       if (e.shiftKey) return resetValue(meta);
       const level = selectLevelOf(meta);
       if (!level) return;
       const click = moveSelectClick(level, listRowRef.current, listBackRef.current);
-      if (click.cursor !== void 0) import_TweakStore22.TweakStore.setSelectCursor(page.panel.id, meta.path, click.cursor);
-      if (click.tap) import_TweakStore22.TweakStore.tapSelect(page.panel.id, meta.path);
+      if (click.cursor !== void 0) import_TweakStore23.TweakStore.setSelectCursor(page.panel.id, meta.path, click.cursor);
+      if (click.tap) import_TweakStore23.TweakStore.tapSelect(page.panel.id, meta.path);
     },
     onPointerCancel: () => {
       endPress(meta.path);
@@ -19322,19 +19342,19 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
     onPointerLeave: (e) => moveListHover(e.currentTarget, null),
     onWheel: (e) => {
       const level = selectLevelOf(meta);
-      if (e.defaultPrevented || !e.deltaY || !level || import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (e.defaultPrevented || !e.deltaY || !level || import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) return;
       e.stopPropagation();
-      import_TweakStore22.TweakStore.setSelectCursor(page.panel.id, meta.path, level.cursor + Math.sign(e.deltaY));
+      import_TweakStore23.TweakStore.setSelectCursor(page.panel.id, meta.path, level.cursor + Math.sign(e.deltaY));
     },
     onKeyDown: (e) => {
       const level = selectLevelOf(meta);
-      if (!level || import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) return;
+      if (!level || import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) return;
       const next = moveListKey(moveSelectWalkIndex(level), moveSelectWalkCount(level), e);
       if (!next) return;
       e.preventDefault();
       e.stopPropagation();
-      if (next === "toggle") import_TweakStore22.TweakStore.tapSelect(page.panel.id, meta.path);
-      else import_TweakStore22.TweakStore.setSelectCursor(page.panel.id, meta.path, moveSelectFromWalk(level, next.cursor));
+      if (next === "toggle") import_TweakStore23.TweakStore.tapSelect(page.panel.id, meta.path);
+      else import_TweakStore23.TweakStore.setSelectCursor(page.panel.id, meta.path, moveSelectFromWalk(level, next.cursor));
     }
   });
   const xyFromPointer = (e, meta) => write2(meta, moveXYValue(meta, values[meta.path], e, e.currentTarget.getBoundingClientRect(), fineRef));
@@ -19386,7 +19406,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   };
   const dragEdge = (kind, isStart, meta, x) => {
     const v01 = kind === "loop" ? x : Math.min(1, (isStart ? x : 1 - x) * 2);
-    import_TweakStore22.TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
+    import_TweakStore23.TweakStore.updateValue(page.panel.id, meta.path, denormalizeDial(meta, v01));
   };
   const trimSpanAt = (col) => {
     const start = dialAt(col);
@@ -19507,7 +19527,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
   };
   const chipGesture = (col, meta) => {
     const scrubs = moveChipScrubs(meta);
-    const off = () => import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path);
+    const off = () => import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path);
     return {
       onPointerDown: (e) => {
         if (e.button > 0) return;
@@ -19595,7 +19615,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
         e.preventDefault();
         nestTap.current = null;
         nestSwallow.current = true;
-        if (!Object.is(values[hit.meta.path], mark.value)) import_TweakStore22.TweakStore.updateValue(page.panel.id, hit.meta.path, mark.value);
+        if (!Object.is(values[hit.meta.path], mark.value)) import_TweakStore23.TweakStore.updateValue(page.panel.id, hit.meta.path, mark.value);
         openNest(hit.meta);
         return;
       }
@@ -19747,7 +19767,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                   functionChips === "tracks" && /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveFunctionChips, {})
                 ] })
               ] }),
-              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveColorSteps, { color, disabled: import_TweakStore22.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore4.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveModCircle, { slot }, slot.index)) : null }),
+              /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "tweakers-move-mods", children: settingsOpen ? roomWave ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveAudioZoom, {}) : null : color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveColorSteps, { color, disabled: import_TweakStore23.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : surface.steps === null ? import_ModulationStore4.ModulationStore.getSlots().map((slot) => /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveModCircle, { slot }, slot.index)) : null }),
               audioWave != null ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveAudioTransport, { index: audioWave }) : roomWave ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveRoomTransport, {}) : headerCluster
             ] }),
             /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
@@ -19831,7 +19851,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                   const sub = dialAt(i);
                                   const meta = dialSpan(page.dials[i]) > 1 || isColumnFilter(page.dials[i]) && sub?.resonanceOf === page.dials[i].path ? page.dials[i] : sub;
                                   if (!meta) return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "tweakers-move-dial", "data-empty": "true" }, `empty-${i}`);
-                                  const disabled = import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path);
+                                  const disabled = import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path);
                                   const active = dragPath === meta.path || !!handTouch[meta.path] || !!hwHeld[meta.path] || held !== null && held.col === i;
                                   const valueFirst = meta.type === "slider" && meta.display === "value" || (focused || !!settingsPanel || page.panel.kind === "kit") && !(meta.min === 0 && meta.max === 1);
                                   const scopeSlot = settingsPanel ? modLayout?.dials.find((d) => d.path === meta.path)?.scope : void 0;
@@ -19975,7 +19995,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                           rampGesture.current = null;
                                           setDragPath(null);
                                           fineRef.current = null;
-                                          if (tapped && editable3 && !import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) {
+                                          if (tapped && editable3 && !import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) {
                                             MoveColorStore.toggle(page.panel.id, meta.path);
                                           }
                                         },
@@ -20255,7 +20275,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       meta.path
                                     );
                                   }
-                                  const level = meta.type === "select" && meta.optionTree && isEnumDial(meta) ? import_TweakStore22.TweakStore.getSelectLevel(page.panel.id, meta.path) : null;
+                                  const level = meta.type === "select" && meta.optionTree && isEnumDial(meta) ? import_TweakStore23.TweakStore.getSelectLevel(page.panel.id, meta.path) : null;
                                   if (level) {
                                     const activeIdx = enumIndex(meta, values[meta.path]);
                                     return /* @__PURE__ */ (0, import_jsx_runtime23.jsxs)(
@@ -20401,8 +20421,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         "aria-checked": checked,
                                         disabled,
                                         onClick: () => {
-                                          if (!import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path)) {
-                                            import_TweakStore22.TweakStore.updateValue(page.panel.id, meta.path, !checked);
+                                          if (!import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path)) {
+                                            import_TweakStore23.TweakStore.updateValue(page.panel.id, meta.path, !checked);
                                           }
                                         },
                                         children: [
@@ -20541,7 +20561,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       return {
                                         ...shown(d),
                                         ...visual?.kind === "channel" ? { icon: visual.icon, tone: visual.tone } : {},
-                                        off: import_TweakStore22.TweakStore.isDisabled(page.panel.id, d.meta.path)
+                                        off: import_TweakStore23.TweakStore.isDisabled(page.panel.id, d.meta.path)
                                       };
                                     }) }) : face.kind === "vector" ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveSlotVectorBody, { x: shown(dials[0]), y: shown(dials[1]), z: shown(dials[2]), down: face.down }) : face.kind === "grain" ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
                                       MoveSlotGrainBody,
@@ -20570,7 +20590,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         children: [
                                           body,
                                           /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "tweakers-move-face-zones", children: dials.map((d) => {
-                                            const off = import_TweakStore22.TweakStore.isDisabled(page.panel.id, d.meta.path);
+                                            const off = import_TweakStore23.TweakStore.isDisabled(page.panel.id, d.meta.path);
                                             const grip = (m) => m.type === "select" ? optionDrag(m) : dialDrag(m);
                                             const options = d.meta.type === "select" ? d.meta.options ?? [] : null;
                                             return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
@@ -20646,7 +20666,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                         children: [
                                           /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveSlotTrimSpanBody, { start: side(edges[0]), end: side(edges[1]) }),
                                           /* @__PURE__ */ (0, import_jsx_runtime23.jsx)("div", { className: "tweakers-move-trim-span-zones", children: edges.map((e) => {
-                                            const off = import_TweakStore22.TweakStore.isDisabled(page.panel.id, e.meta.path);
+                                            const off = import_TweakStore23.TweakStore.isDisabled(page.panel.id, e.meta.path);
                                             return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
                                               "div",
                                               {
@@ -20722,7 +20742,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                 })())),
                                 page.nested && visibleCols.map((i, at2) => page.dials[i] && !isSpanContinuation(page, i) && moveNestChildren(page, page.dials[i].path).length > 0 && dialAt(i) === page.dials[i] ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveNestMark, { column: at2 }, `nest-${i}`) : null)
                               ] }),
-                              color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveOpacityPads, { color, disabled: import_TweakStore22.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : shownPadRows.map((row2) => {
+                              color && colorMeta ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MoveOpacityPads, { color, disabled: import_TweakStore23.TweakStore.isDisabled(page.panel.id, colorMeta.path) }) : shownPadRows.map((row2) => {
                                 if (appRowAt(row2) !== null && !surface.pads.length) {
                                   if (row2 > firstAppScreenRow) return null;
                                   return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
@@ -20810,8 +20830,8 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                   className: "tweakers-move-tab-zone",
                                                   style: { gridColumnStart: (named ? 2 : 1) + i },
                                                   "aria-selected": i === active,
-                                                  disabled: import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path),
-                                                  onClick: () => import_TweakStore22.TweakStore.updateValue(
+                                                  disabled: import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path),
+                                                  onClick: () => import_TweakStore23.TweakStore.updateValue(
                                                     page.panel.id,
                                                     meta.path,
                                                     enumOptionValue(opt)
@@ -20931,7 +20951,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                               const x = edgesFromPointer(e);
                                               const takeStart = edges.kind === "fade" ? x < 0.5 : Math.abs(x - start.at) < Math.abs(x - end.at) || start.at >= end.at && x <= start.at;
                                               const m = takeStart ? edges.start : edges.end;
-                                              if (import_TweakStore22.TweakStore.isDisabled(page.panel.id, m.path)) return;
+                                              if (import_TweakStore23.TweakStore.isDisabled(page.panel.id, m.path)) return;
                                               try {
                                                 e.currentTarget.setPointerCapture(e.pointerId);
                                               } catch {
@@ -20942,7 +20962,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                             },
                                             onPointerMove: (e) => {
                                               const m = dragPath === edges.start.path ? edges.start : dragPath === edges.end.path ? edges.end : null;
-                                              if (m && !import_TweakStore22.TweakStore.isDisabled(page.panel.id, m.path)) dragEdge(edges.kind, m === edges.start, m, edgesFromPointer(e));
+                                              if (m && !import_TweakStore23.TweakStore.isDisabled(page.panel.id, m.path)) dragEdge(edges.kind, m === edges.start, m, edgesFromPointer(e));
                                             },
                                             onPointerUp: () => setDragPath(null),
                                             onPointerCancel: () => setDragPath(null),
@@ -20953,7 +20973,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                                 {
                                                   className: "tweakers-move-edges-zone",
                                                   role: "slider",
-                                                  tabIndex: import_TweakStore22.TweakStore.isDisabled(page.panel.id, m.path) ? -1 : 0,
+                                                  tabIndex: import_TweakStore23.TweakStore.isDisabled(page.panel.id, m.path) ? -1 : 0,
                                                   "aria-label": m.label,
                                                   "aria-valuemin": m.min ?? 0,
                                                   "aria-valuemax": m.max ?? 1,
@@ -21020,7 +21040,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                             "aria-label": meta.icon ? caption ? `${meta.label}: ${caption}` : meta.label : void 0,
                                             title: meta.icon ? meta.label : void 0,
                                             ...meta.moveHold ? holdPad(page.panel.id, meta.path) : {
-                                              onClick: () => import_TweakStore22.TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path])
+                                              onClick: () => import_TweakStore23.TweakStore.updateValue(page.panel.id, meta.path, !values[meta.path])
                                             },
                                             children: meta.icon ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MovePadIconBody, { icon: meta.icon, caption }) : /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MovePadToggleBody, { label: meta.label })
                                           },
@@ -21029,7 +21049,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                       }
                                       if (meta.type === "action") {
                                         const face = moveActionDrawing(meta);
-                                        if (MovePadListStore.has(page.panel.id, meta.path)) return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MovePadList, { panelId: page.panel.id, path: meta.path, label: meta.label, icon: meta.icon, face, view: padListView, disabled: import_TweakStore22.TweakStore.isDisabled(page.panel.id, meta.path) }, meta.path);
+                                        if (MovePadListStore.has(page.panel.id, meta.path)) return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MovePadList, { panelId: page.panel.id, path: meta.path, label: meta.label, icon: meta.icon, face, view: padListView, disabled: import_TweakStore23.TweakStore.isDisabled(page.panel.id, meta.path) }, meta.path);
                                         return /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(
                                           "button",
                                           {
@@ -21038,7 +21058,7 @@ function MovePanel({ theme = "system", productionEnabled = isDevDefault, panels:
                                             "data-face": face?.kind,
                                             "aria-label": face ? meta.label : void 0,
                                             title: face ? meta.label : void 0,
-                                            onClick: () => import_TweakStore22.TweakStore.triggerAction(page.panel.id, meta.path),
+                                            onClick: () => import_TweakStore23.TweakStore.triggerAction(page.panel.id, meta.path),
                                             children: face ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MovePadFaceBody, { drawing: face }) : meta.icon ? /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MovePadIconLabelBody, { icon: meta.icon, label: meta.label }) : /* @__PURE__ */ (0, import_jsx_runtime23.jsx)(MovePadActionBody, { label: meta.label })
                                           },
                                           meta.path
@@ -22965,7 +22985,7 @@ function MoveConnectionDot({ className }) {
 
 // src/use-move-timeline.ts
 var import_react29 = require("react");
-var import_TweakStore23 = require("tweakers/store");
+var import_TweakStore24 = require("tweakers/store");
 
 // src/timeline/adapter.ts
 function resolveTimelineLoop(loop) {
@@ -23022,8 +23042,8 @@ function useMoveTimeline(name, config, options) {
   const parsedRef = (0, import_react29.useRef)(parsed);
   parsedRef.current = parsed;
   (0, import_react29.useEffect)(() => {
-    import_TweakStore23.TweakStore.registerPanel(id, name, parsedRef.current.tweakConfig, void 0, panelOptions());
-    return () => import_TweakStore23.TweakStore.unregisterPanel(id);
+    import_TweakStore24.TweakStore.registerPanel(id, name, parsedRef.current.tweakConfig, void 0, panelOptions());
+    return () => import_TweakStore24.TweakStore.unregisterPanel(id);
   }, [id, name]);
   const shaped = (0, import_react29.useRef)(false);
   (0, import_react29.useEffect)(() => {
@@ -23031,12 +23051,12 @@ function useMoveTimeline(name, config, options) {
       shaped.current = true;
       return;
     }
-    import_TweakStore23.TweakStore.updatePanel(id, name, parsed.tweakConfig, void 0, panelOptions());
+    import_TweakStore24.TweakStore.updatePanel(id, name, parsed.tweakConfig, void 0, panelOptions());
   }, [id, name, parsed]);
   const values = (0, import_react29.useSyncExternalStore)(
-    (0, import_react29.useCallback)((cb) => import_TweakStore23.TweakStore.subscribe(id, cb), [id]),
-    () => import_TweakStore23.TweakStore.getValues(id),
-    () => import_TweakStore23.TweakStore.getValues(id)
+    (0, import_react29.useCallback)((cb) => import_TweakStore24.TweakStore.subscribe(id, cb), [id]),
+    () => import_TweakStore24.TweakStore.getValues(id),
+    () => import_TweakStore24.TweakStore.getValues(id)
   );
   const statics = (0, import_react29.useMemo)(() => computeStaticTimeline(parsed, values), [parsed, values]);
   const duration = statics.duration;
@@ -24375,7 +24395,7 @@ function layerListScreen(rows, index) {
 }
 
 // src/index.ts
-var import_TweakStore24 = require("tweakers/store");
+var import_TweakStore25 = require("tweakers/store");
 // Annotate the CommonJS export names for ESM import in node:
 0 && (module.exports = {
   ADSR_DEF,
