@@ -507,6 +507,14 @@ press does instead of repeating what is chosen. The host owns the value: a re-at
 `selected` moves the choice, where a checked list keeps what the user ticked.
 `moveKitOptions()` includes this registry as `padList`.
 
+**Under a free pointer.** With the Panel hand off, a mouse resting on a list
+pad opens its list, with no click; a click on a row works as above (a picker
+takes the row and commits), and moving the pointer off the pad and its list
+closes what hover opened. While hover holds a picker open, a click on its pad
+takes no row: the rows are the way to choose. A list a press opened stays
+until it is done, as on the Move. With the hand on, or for a finger, the pad
+opens only on a press.
+
 `MovePadListBody` is the shared drawing in `MOVE_PAD_LIBRARY.list`; it uses
 `MovePadListView` plus cursor/toggle callbacks. `MoveFunctions.push` keeps
 an overlay above app reattachments and restores the latest app handler.

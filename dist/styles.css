@@ -8139,6 +8139,14 @@
 /* A small list pad keeps its canonical grid cell; its display floats above. */
 .tweakers-move-pad-list-anchor { position: relative; min-width: 0; }
 .tweakers-move-pad-list-anchor > .tweakers-move-pad { width: 100%; height: 100%; }
+/* A list hover opened keeps the pointer across the gap up to it: a strip
+   of the anchor spans the gap, so crossing it never reads as leaving. */
+.tweakers-move-pad-list-anchor[data-hover-open]::before {
+  content: '';
+  position: absolute;
+  inset: auto 0 100% 0;
+  height: var(--move-gap);
+}
 /* The expanded dial screen anchored to its submitting pad. */
 .tweakers-move-pad-list-overlay {
   inset: auto 0 calc(100% + var(--move-gap)) auto;
