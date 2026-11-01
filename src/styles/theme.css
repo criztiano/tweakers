@@ -4100,6 +4100,11 @@
    it never opens it — that is the hand selecting, as on the Move a knob's
    list opens only under a finger. */
 @media (hover: hover) {
+  /* With the Panel hand off the pointer is a pointer, not a hand: resting
+     on a slot opens its long list, so every row can be seen and clicked.
+     A slot outside the panel (a Library card) is never in the hand, so it
+     opens the same way. */
+  .tweakers-move-dial:not([data-disabled]):not([data-hand="steer"] *):hover .tweakers-move-dial-screen[data-grow],
   .tweakers-move-dial:not([data-disabled])[data-steer-held] .tweakers-move-dial-screen[data-grow] {
     top: auto;
     height: min(var(--move-screen-full), 50vh);
